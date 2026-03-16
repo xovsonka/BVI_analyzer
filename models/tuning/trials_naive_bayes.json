@@ -1,0 +1,68 @@
+[
+  {
+    "model": "naive_bayes",
+    "trial": 1,
+    "tfidf": {
+      "max_features": 30000,
+      "min_df": 2,
+      "ngram_range": [
+        1,
+        1
+      ]
+    },
+    "params": {
+      "alpha": 0.1
+    },
+    "threshold": 0.45,
+    "val_precision_label1": 0.9472775411534476,
+    "val_recall_label1": 0.9607705779334501,
+    "val_f1_label1": 0.9539763505680501,
+    "test_accuracy": 0.9884728760614193,
+    "test_precision_label1": 0.9500115713955103,
+    "test_recall_label1": 0.9586641756188697,
+    "test_f1_label1": 0.9543182610717191,
+    "test_confusion_matrix": [
+      [
+        59191,
+        432
+      ],
+      [
+        354,
+        8210
+      ]
+    ]
+  },
+  {
+    "model": "naive_bayes",
+    "trial": 2,
+    "tfidf": {
+      "max_features": 30000,
+      "min_df": 2,
+      "ngram_range": [
+        1,
+        1
+      ]
+    },
+    "params": {
+      "alpha": 0.5
+    },
+    "threshold": 0.45,
+    "val_precision_label1": 0.9360927905390038,
+    "val_recall_label1": 0.9611208406304729,
+    "val_f1_label1": 0.9484417305144306,
+    "test_accuracy": 0.9867423409154238,
+    "test_precision_label1": 0.9373144553551039,
+    "test_recall_label1": 0.9585474077533863,
+    "test_f1_label1": 0.9478120309433091,
+    "test_confusion_matrix": [
+      [
+        59074,
+        549
+      ],
+      [
+        355,
+        8209
+      ]
+    ]
+  }
+]
