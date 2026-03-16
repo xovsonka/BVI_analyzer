@@ -1,0 +1,13 @@
+# Ignore specific directories
+MailHog/
+gophish/
+env/
+dataset/
+
+# Optional: ignore common environment files
+.env
+.env.*
+
+# Optional: system files
+.DS_Store
+Thumbs.db
