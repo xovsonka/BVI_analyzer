@@ -1,0 +1,33 @@
+{
+  "model": "linear_svc",
+  "trial": 2,
+  "tfidf": {
+    "max_features": 30000,
+    "min_df": 2,
+    "ngram_range": [
+      1,
+      1
+    ]
+  },
+  "params": {
+    "C": 1.0
+  },
+  "threshold": 0.5,
+  "val_precision_label1": 0.9938300349243306,
+  "val_recall_label1": 0.9967308814944542,
+  "val_f1_label1": 0.995278344505975,
+  "test_accuracy": 0.9987827591769692,
+  "test_precision_label1": 0.9938278793525096,
+  "test_recall_label1": 0.9964969640354975,
+  "test_f1_label1": 0.9951606320331176,
+  "test_confusion_matrix": [
+    [
+      59570,
+      53
+    ],
+    [
+      30,
+      8534
+    ]
+  ]
+}
