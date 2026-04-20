@@ -1,0 +1,104 @@
+
+
+
+
+
+
+
+
+    Experiment 6 – porovnanie s PhishTool
+
+    Tu by som bol metodicky opatrný. Pôvodná špecifikácia hovorí porovnať tvoj nástroj s PhishTool na rovnakých testovacích e-mailoch a porovnať identifikované IOC a schopnosť detegovať podozrivé e-maily.
+
+    To je dobré, ale PhishTool nie je ten istý typ nástroja ako tvoj modelový klasifikátor. Je skôr analytická platforma na phishing investigation než čistý klasifikátor. Preto by som Exp6 nepostavil ako „kto má vyššie F1“, ale ako referenčné porovnanie schopností.
+
+    Najlepší dizajn Exp6
+
+    Rozdelil by som ho na dve vetvy.
+
+    Vetva A – IOC / analytical comparison
+
+    Na rovnakom sete .eml správ porovnaj:
+
+    extrakciu hlavičiek,
+    URL IOC,
+    sender mismatch,
+    auth signály,
+    attachment / suspicious content signály,
+    explainability výstup.
+
+    Pre každý mail si vytvor tabuľku:
+
+    our_tool_detected
+    phishtool_detected
+    match / mismatch
+    notes
+
+    Tu neporovnávaš klasifikáciu, ale pokrytie analytických znakov.
+
+    Vetva B – decision-level comparison
+
+    Ak PhishTool poskytuje nejaké verdicty / kategórie / analyst labels, porovnaj:
+
+    legit vs suspicious
+    prípadne phishing indicators present vs absent
+
+    Ak PhishTool verdict nemá alebo je to len manuálny analytický nástroj, sprav:
+
+    manual analyst benchmark
+    t. j. vezmeš IOC extrahované PhishTool a porovnáš ich s tvojím nástrojom.
+    Na akom datasete
+
+    Nie na obrovskom datasete. Tu je lepší menší, ale reprezentatívny set, napríklad:
+
+    15 legit
+    15 phishing
+    10 spoofing/header-heavy
+    10 URL-heavy
+    10 spam
+    10 financial fraud
+
+    Spolu 60 mailov.
+
+    Dôležité je, aby tam boli:
+
+    čisté prípady,
+    hraničné prípady,
+    prípady kde tvoj analyzátor silnie,
+    prípady kde môže byť silný PhishTool.
+    Čo porovnávať
+
+    Nie len „detegoval / nedetegoval“, ale 4 osi:
+
+    IOC coverage
+    koľko relevantných signálov zachytil
+    explainability
+    či výstup vieš priamo interpretovať
+    automatizovateľnosť
+    či sa to dá zaradiť do pipeline
+    decision quality
+    binárny verdict, ak existuje
+    Prečo je tento experiment dôležitý
+
+    Ukáže, že tvoje riešenie nie je len interný classifier benchmark, ale vieš ho porovnať aj s existujúcim bezpečnostným nástrojom, ktorý má praktické použitie v incident response. Špecifikácia to od teba explicitne chce.
+
+    Čo by som spravil ja konkrétne
+    Experiment 5
+
+    Spravil by som ho ako:
+
+    Exp5A: binárne porovnanie heuristic_only vs ml_only vs hybrid_A vs hybrid_B
+    Exp5B: multiclass porovnanie ml_only vs hybrid_A vs hybrid_B
+    Exp5C: error analysis na 12–15 správach
+
+    To bude veľmi silná kapitola.
+
+    Experiment 6
+
+    Spravil by som ho ako:
+
+    Exp6A: capability benchmark s PhishTool
+    Exp6B: IOC overlap table
+    Exp6C: qualitative case study na 5–8 mailoch
+
+    To je realistické aj obhájiteľné.

@@ -11,3 +11,31 @@ dataset/
 # Optional: system files
 .DS_Store
 Thumbs.db
+
+# Python cache / build artifacts
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Virtual envs / tool caches
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Local experiment outputs
+results/
+models/tuning/
+dataset/campaign_eml/
+dataset/processed/mailhog_messages.csv
+
+# Local docs / temp files
+BVI_6_Projekt*.pdf
+nul
+*.log
+
+archive/
+models/
+

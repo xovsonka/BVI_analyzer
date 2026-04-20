@@ -1,0 +1,2340 @@
+\documentclass[conference]{IEEEtran}
+\IEEEoverridecommandlockouts
+% The preceding line is only needed to identify funding in the first footnote. If that is unneeded, please comment it out.
+%Template version as of 6/27/2024
+\usepackage[slovak,english]{babel}
+\usepackage{tikz}
+\usetikzlibrary{positioning,arrows.meta}
+\usepackage{graphicx}
+\usepackage{cite}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{algorithmic}
+\usepackage{float}
+\usepackage{booktabs}
+\usepackage{textcomp}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{stfloats}
+\usepackage{lmodern}
+
+\usepackage{xcolor}
+\def\BibTeX{{\rm B\kern-.05em{\sc i\kern-.025em b}\kern-.08em
+    T\kern-.1667em\lower.7ex\hbox{E}\kern-.125emX}}
+\begin{document}
+\selectlanguage{slovak}
+\title{Bezpečnosť elektronickej pošty – analýza hrozieb a návrh nástroja na detekciu podozrivých e-mailov\\
+}
+\author{\IEEEauthorblockN{Alexander Ovšonka}
+\textit{STU FIIT}\\
+xovsonka@stuba.sk}
+
+
+\maketitle
+
+\begin{abstract}
+Táto práca sa zaoberá problematikou bezpečnosti e-mailovej komunikácie a analýzou hrozieb, ktoré sa v nej vyskytujú. V práci sú predstavené základné princípy fungovania e-mailovej komunikácie, formát e-mailových správ a najčastejšie typy útokov, ako sú phishing, spam alebo spoofing.
+
+Súčasťou práce je návrh vlastného riešenia na detekciu podozrivých e-mailov, ktoré kombinuje heuristický analyzátor s prístupmi strojového učenia. Navrhnutý systém využíva extrakciu príznakov z obsahu aj hlavičiek správ a umožňuje klasifikáciu e-mailov do viacerých kategórií.
+
+Navrhnuté riešenie je experimentálne overené na dátach získaných z verejných datasetov aj simulovaných kampaní, pričom výsledky poukazujú na jeho schopnosť efektívne detegovať škodlivé e-mailové správy.
+\end{abstract}
+
+\begin{IEEEkeywords}
+email security, phishing detection, spam detection, email communication, machine learning, heuristic analysis, cybersecurity, email threats
+\end{IEEEkeywords}
+
+\section{Úvod}
+
+Elektronická pošta patrí medzi najrozšírenejšie formy digitálnej komunikácie, no zároveň predstavuje jeden z najvýznamnejších vektorov kybernetických útokov. Útočníci čoraz častejšie využívajú pokročilé techniky sociálneho inžinierstva a sofistikované formy manipulácie s cieľom oklamať používateľa, získať citlivé údaje alebo distribuovať škodlivý softvér, ako napríklad malware či ransomware.
+
+S rastúcou kvalitou a vierohodnosťou podvodných e-mailov sa ich detekcia stáva čoraz náročnejšou nielen pre automatizované systémy, ale aj pre samotných používateľov. Tento trend vedie k potrebe vývoja robustnejších detekčných mechanizmov, ktoré dokážu identifikovať škodlivé správy aj v podmienkach meniacich sa útočných techník.
+
+Cieľom tejto práce je analyzovať problematiku bezpečnosti e-mailovej komunikácie a navrhnúť nástroj na detekciu podozrivých e-mailov. V teoretickej časti sa zameriavame na princípy fungovania e-mailovej komunikácie, jej architektúru a formát správ, ako aj na najčastejšie typy útokov a indikátory podvodných e-mailov. Zároveň predstavujeme základné mechanizmy ochrany používané v praxi.
+
+Praktická časť práce sa venuje návrhu a implementácii vlastného riešenia, ktoré kombinuje heuristický analyzátor s prístupmi strojového učenia. Súčasťou je návrh klasifikačného modelu, extrakcia relevantných príznakov a realizácia experimentov zameraných na overenie presnosti a robustnosti navrhnutého systému. Okrem toho sú analyzované aj existujúce open-source nástroje a ich využitie v kontexte bezpečnosti e-mailovej komunikácie.
+\section{Teoretické základy}
+\subsection{Architektúra e-mailovej komunikácie}
+
+Elektronická pošta patrí medzi najstaršie a najrozšírenejšie služby internetu. 
+Jej fungovanie je založené na súbore štandardizovaných internetových protokolov 
+a formátov správ, ktoré umožňujú vytváranie, prenos a doručovanie e-mailových správ 
+medzi jednotlivými účastníkmi komunikácie\cite{rfc5598}.
+
+Základom e-mailovej infraštruktúry je protokol \textbf{SMTP} (Simple Mail Transfer Protocol), 
+ktorý zabezpečuje prenos e-mailových správ medzi servermi v internete. 
+Formát samotnej e-mailovej správy je definovaný štandardom 
+\textbf{Internet Message Format}, zatiaľ čo rozšírenie \textbf{MIME (Multipurpose Internet Mail Extensions)} 
+rozširuje formát e-mailovej správy tak, aby bolo možné prenášať 
+rôzne typy dát, napríklad binárne prílohy, obrázky alebo HTML obsah\cite{rfc5598}.
+
+Architektúra elektronickej pošty je vysoko distribuovaná. 
+Na jej fungovaní sa podieľa viacero komponentov a aktérov, ktorí spolupracujú 
+pri spracovaní a prenose správy od odosielateľa k príjemcovi. 
+Podľa architektúry možno týchto aktérov rozdeliť 
+do niekoľkých základných kategórií\cite{rfc5598}.\\
+
+
+\textbf{Používatelia}
+
+Používateľ predstavuje entitu, ktorá vytvára alebo prijíma e-mailové správy. 
+Používateľom môže byť človek, organizácia alebo automatizovaný proces. 
+V rámci e-mailovej architektúry možno rozlíšiť viacero rolí používateľov\cite{rfc5598}.
+
+\begin{itemize}
+\item \textbf{Author (autor)} – entita zodpovedná za vytvorenie správy a určenie jej príjemcov.
+\item \textbf{Recipient (príjemca)} – cieľová entita, ktorej je správa určená.
+\item \textbf{Return handler} – špeciálny typ príjemcu, ktorý prijíma systémové notifikácie generované počas prenosu správy (napr. chybové hlásenia o nedoručení).
+\item \textbf{Mediator} – komponent alebo služba, ktorá prijíma správu, modifikuje ju alebo redistribuuje medzi ďalších príjemcov. Typickým príkladom sú mailing listy alebo automatické presmerovania.
+\end{itemize}
+
+Z pohľadu používateľa sa proces prenosu e-mailu javí ako jednotná služba 
+poskytovaná systémom spracovania správ, nazývaným \textbf{Message Handling System (MHS)}. 
+V praxi však môže byť táto služba implementovaná viacerými nezávislými systémami 
+a organizáciami\cite{rfc5598}.\\
+
+\textbf{Message Handling System}
+
+Predstavuje infraštruktúru, ktorá zabezpečuje 
+kompletný prenos správy od autora k príjemcovi. 
+Jeho úlohou je vykonať prenos správy spôsobom \textit{store-and-forward}, 
+pri ktorom sa správa postupne prenáša medzi jednotlivými servermi, 
+kým nie je doručená cieľovému príjemcovi\cite{rfc5598}.
+
+MHS pozostáva z viacerých komponentov\cite{rfc5598}:
+
+\begin{itemize}
+\item \textbf{Message User Agent (MUA)} – klientská aplikácia používaná používateľom 
+na vytváranie, čítanie a odosielanie e-mailových správ.
+\item \textbf{Mail Submission Agent (MSA)} – prijíma správy od MUA a kontroluje ich 
+súlad s pravidlami domény a internetovými štandardmi.
+\item \textbf{Message Transfer Agent (MTA)} – zodpovedá za prenos správy medzi jednotlivými 
+poštovými servermi. Na komunikáciu medzi MTA sa používa protokol SMTP.
+\item \textbf{Mail Delivery Agent (MDA)} – zabezpečuje konečné doručenie správy 
+do mailboxu príjemcu.
+\item \textbf{Message Store} – úložisko správ, z ktorého si používateľ môže 
+svoje e-maily načítať prostredníctvom klienta.
+\end{itemize}
+
+Prenos správy medzi jednotlivými servermi prebieha postupne, pričom každý server 
+správu dočasne uloží a následne ju prepošle ďalšiemu serveru. 
+Tento model komunikácie sa označuje ako \textbf{store-and-forward}\cite{rfc5598}.\\
+
+\textbf{Relay a Gateway}
+
+V rámci infraštruktúry MHS môžu vystupovať aj ďalšie komponenty\cite{rfc5598}.
+
+\begin{itemize}
+\item \textbf{Relay} – server, ktorý prijíma e-mailovú správu a preposiela ju 
+ďalšiemu serveru smerom k cieľovému príjemcovi.
+\item \textbf{Gateway} – komponent prepájajúci rôzne e-mailové systémy alebo 
+komunikačné protokoly. Gateway môže upravovať obsah správy alebo jej formát 
+tak, aby bola kompatibilná s cieľovým systémom.
+\end{itemize}
+
+\textbf{Adresovanie e-mailov}
+
+Každý používateľ e-mailovej služby je identifikovaný pomocou e-mailovej adresy. 
+Tá má všeobecný tvar\cite{rfc5598}:
+
+\[
+local\text{-}part@domain
+\]
+
+Adresa sa skladá z dvoch častí\cite{rfc5598}:
+
+\begin{itemize}
+\item \textbf{local-part} – identifikátor používateľa v rámci konkrétnej domény,
+\item \textbf{domain} – názov domény, ktorá identifikuje poštový server zodpovedný 
+za doručenie správy.
+\end{itemize}
+
+Doménové meno je globálne jedinečný identifikátor internetového zdroja, 
+ktorý sa pomocou systému DNS mapuje na IP adresu servera\cite{rfc5598}.
+
+\textbf{Identifikácia správ}
+
+Každá e-mailová správa môže byť identifikovaná pomocou jedinečných identifikátorov\cite{rfc5598}.
+
+\begin{itemize}
+\item \textbf{Message-ID} – jedinečný identifikátor správy používaný na sledovanie 
+a referencovanie správy v rámci e-mailovej komunikácie\cite{rfc5598}.
+\item \textbf{ENVID} – identifikátor používaný pri sledovaní prenosu správy 
+počas jej doručovania v rámci SMTP komunikácie\cite{rfc5598}.
+\end{itemize}
+
+Tieto identifikátory umožňujú sledovať stav správy počas jej prenosu 
+a uľahčujú diagnostiku problémov pri doručovaní.
+
+\textbf{Asynchrónna komunikácia}
+
+Prenos e-mailových správ prebieha asynchrónne. 
+Správa sa postupne presúva medzi jednotlivými servermi, 
+ktoré ju ukladajú a následne preposielajú ďalšiemu serveru. 
+Tento model komunikácie umožňuje spoľahlivý prenos správ aj v prípade 
+dočasnej nedostupnosti niektorých serverov alebo sieťových spojení\cite{rfc5321}.
+\textbf{DNS a MX záznamy}
+
+Pri doručovaní e-mailovej správy je potrebné určiť server, ktorý je 
+zodpovedný za prijatie správy pre cieľovú doménu. Tento proces je 
+realizovaný pomocou systému doménových mien (DNS). Doménové meno 
+predstavuje globálny identifikátor internetového zdroja, ktorý je možné 
+prostredníctvom DNS preložiť na IP adresu konkrétneho servera\cite{rfc5321}.
+
+Pri doručovaní e-mailov sa využívajú najmä \textbf{MX (Mail Exchange) záznamy}, 
+ktoré určujú poštové servery zodpovedné za prijímanie správ pre danú doménu. 
+Ak server potrebuje doručiť e-mail na adresu napríklad \textit{user@example.com}, 
+najprv z adresy extrahuje doménu \textit{example.com}. Následne vykoná DNS 
+dotaz na MX záznamy tejto domény. Výsledkom môže byť jeden alebo viacero 
+poštových serverov, pričom každý má priradenú prioritu určujúcu poradie 
+použitia\cite{rfc5321}.
+
+Server sa následne pokúsi nadviazať SMTP spojenie s poštovým serverom 
+s najvyššou prioritou. Ak sa spojenie nepodarí nadviazať, môže skúsiť 
+ďalší server v poradí. V prípade, že doména nemá definovaný MX záznam, 
+SMTP špecifikácia umožňuje použiť ako cieľový server host definovaný 
+pomocou \textbf{A alebo AAAA DNS záznamu}. Tento mechanizmus zabezpečuje 
+spoľahlivé smerovanie e-mailovej komunikácie v distribuovanom prostredí 
+internetu\cite{rfc5321}.
+
+\textbf{SMTP komunikácia medzi servermi}
+
+Prenos e-mailových správ medzi poštovými servermi je realizovaný pomocou 
+protokolu \textbf{SMTP}. SMTP používa 
+model komunikácie klient–server, kde jeden server vystupuje ako klient 
+iniciujúci prenos správy a druhý server ako server prijímajúci správu\cite{rfc5321}.
+
+Po nadviazaní TCP spojenia medzi servermi prebieha komunikácia pomocou 
+sekvencie textových príkazov a odpovedí. Komunikácia začína identifikáciou 
+servera pomocou príkazu \textbf{HELO} alebo jeho rozšírenej verzie 
+\textbf{EHLO}. Následne odosielajúci server oznámi adresu odosielateľa 
+pomocou príkazu \textbf{MAIL FROM}. Pre každého príjemcu je následne 
+použitý príkaz \textbf{RCPT TO}, ktorý identifikuje cieľového adresáta 
+správy\cite{rfc5321}.
+
+Po určení všetkých príjemcov je prenesený samotný obsah správy pomocou 
+príkazu \textbf{DATA}. Správa obsahuje hlavičky a telo správy vo formáte 
+IMF. Po úspešnom prenose správy server potvrdí jej 
+prijatie a komunikácia môže byť ukončená príkazom \textbf{QUIT}\cite{rfc5321}.
+
+SMTP využíva model \textit{store-and-forward}, pri ktorom jednotlivé 
+poštové servery dočasne ukladajú prijaté správy a následne ich 
+preposielajú ďalšiemu serveru smerom k cieľovej doméne. Tento prístup 
+umožňuje spoľahlivý prenos správ aj v prípade dočasnej nedostupnosti 
+niektorých serverov alebo sieťových spojení\cite{rfc5321}.
+
+Počas prenosu správy pridáva každý poštový server do hlavičky 
+správy záznam \textit{Received}, ktorý obsahuje informácie o trase 
+doručenia správy. Tieto záznamy umožňujú sledovať cestu e-mailu 
+naprieč jednotlivými servermi a sú dôležité napríklad pri analýze 
+pôvodu podozrivých alebo phishingových správ\cite{rfc5321}.
+
+\subsection{Formát e-mailovej správy}
+
+Formát e-mailovej správy je definovaný štandardom 
+IMF. Tento štandard definuje syntaktickú štruktúru e-mailových správ, 
+vrátane ich hlavičiek a tela správy \cite{rfc5322}.
+
+Na najzákladnejšej úrovni je e-mailová správa reprezentovaná ako sekvencia 
+ASCII znakov. Správa je rozdelená do riadkov znakov, pričom každý riadok 
+je ukončený dvojicou znakov \textbf{CRLF} (Carriage Return a Line Feed). 
+Podľa špecifikácie nesmie jeden riadok správy presiahnuť 998 znakov a 
+odporúčaná maximálna dĺžka riadku je 78 znakov bez započítania CRLF 
+\cite{rfc5322}.
+
+E-mailová správa pozostáva z dvoch hlavných častí:
+
+\begin{itemize}
+\item \textbf{Hlavička správy (Header)}
+\item \textbf{Telo správy (Body)}
+\end{itemize}
+
+Tieto dve časti sú od seba oddelené prázdnym riadkom.
+
+\subsubsection{Hlavička e-mailovej správy}
+
+Hlavička správy obsahuje metadáta popisujúce správu a jej prenos. 
+Je tvorená množinou hlavičkových polí, pričom každé pole má tvar:
+
+\[
+Field-Name: Field-Body
+\]
+
+Názov poľa je tvorený ASCII znakmi a je ukončený dvojbodkou. 
+Obsah poľa môže obsahovať text alebo štruktúrované údaje podľa 
+syntaktických pravidiel \cite{rfc5322}.
+
+Dôležité hlavičkové polia zahŕňajú najmä \cite{rfc5322}:
+
+\begin{itemize}
+\item \textbf{Date} – dátum a čas vytvorenia správy.
+\item \textbf{From} – adresa autora správy.
+\item \textbf{Sender} – identifikuje odosielateľa v prípade, že správa 
+bola odoslaná v mene viacerých autorov.
+\item \textbf{Reply-To} – adresa, na ktorú majú byť zasielané odpovede.
+\item \textbf{To} – adresa hlavného príjemcu správy.
+\item \textbf{Cc} – adresy ďalších príjemcov správy.
+\item \textbf{Bcc} – skrytí príjemcovia správy.
+\item \textbf{Message-ID} – jedinečný identifikátor správy.
+\item \textbf{In-Reply-To} – identifikátor správy, na ktorú sa odpovedá.
+\item \textbf{References} – identifikátory súvisiacich správ v konverzácii.
+\item \textbf{Subject} – stručný opis obsahu správy.
+\end{itemize}
+
+Hlavičkové polia môžu obsahovať štruktúrované aj neštruktúrované údaje. 
+V niektorých prípadoch môže byť dlhý obsah hlavičky rozdelený do viacerých 
+riadkov pomocou mechanizmu nazývaného \textit{header folding}, ktorý umožňuje 
+zalomiť riadok a pokračovať na ďalšom riadku začínajúcom medzerou alebo 
+tabulátorom \cite{rfc5322}.
+
+\subsubsection{Telo správy}
+
+Telo správy obsahuje samotný obsah e-mailu určený pre príjemcu. 
+Je tvorené sekvenciou 
+textových riadkov kódovaných v ASCII. Každý riadok musí byť ukončený 
+sekvenciou CRLF a nesmie prekročiť maximálnu dĺžku 998 znakov \cite{rfc5322}.
+
+Moderné e-mailové správy však často obsahujú aj iné typy dát, napríklad 
+formátovaný text, obrázky alebo binárne prílohy. Na podporu týchto 
+funkcionalít bol definovaný štandard \textbf{MIME} \cite{rfc2045}.
+
+\subsubsection{MIME rozšírenia}
+
+MIME rozširuje základný formát e-mailovej správy o mechanizmy, ktoré 
+umožňujú prenášať rôzne typy dát a viacero častí správy v jednom e-maile. 
+MIME zavádza niekoľko nových hlavičkových polí, medzi ktoré patria najmä\cite{rfc2045}:
+
+\begin{itemize}
+\item \textbf{MIME-Version} – identifikuje správu ako MIME kompatibilnú.
+\item \textbf{Content-Type} – určuje typ obsahu správy alebo jej časti 
+(napr. text/plain, text/html alebo image/jpeg).
+\item \textbf{Content-Transfer-Encoding} – určuje spôsob kódovania 
+obsahu správy, napríklad base64 alebo quoted-printable.
+\end{itemize}
+
+Hlavička \textit{Content-Type} umožňuje špecifikovať typ prenášaných 
+dát pomocou tzv. mediálnych typov. Tie sú definované vo formáte 
+\textit{type/subtype}\cite{rfc2045}. Napríklad:
+
+\begin{itemize}
+\item text/plain – jednoduchý text,
+\item text/html – HTML obsah správy,
+\item image/jpeg – obrázok vo formáte JPEG.
+\end{itemize}
+
+MIME tiež umožňuje vytvárať viacdielne správy pomocou typu 
+\textbf{multipart}. Takáto správa môže obsahovať viacero častí, 
+napríklad textovú verziu správy a HTML verziu alebo rôzne prílohy.\cite{rfc2045}
+
+\subsubsection{Kódovanie dát}
+
+Pri prenose e-mailov cez SMTP je potrebné zabezpečiť kompatibilitu 
+s prenosovými mechanizmami, ktoré pôvodne podporovali len 7-bitové 
+ASCII znaky. MIME preto definuje rôzne metódy kódovania dát.\cite{rfc2045}
+
+Medzi najčastejšie používané patria\cite{rfc2045}:
+
+\begin{itemize}
+\item \textbf{7bit} – základný ASCII formát bez rozšírených znakov.
+\item \textbf{8bit} – umožňuje používať znaky mimo základnej ASCII tabuľky.
+\item \textbf{base64} – kódovanie používané najmä pre binárne prílohy.
+\item \textbf{quoted-printable} – kódovanie používané pre text s 
+rozšírenými znakmi.
+\end{itemize}
+
+Tieto mechanizmy umožňujú bezpečný prenos rôznych typov dát 
+prostredníctvom e-mailovej infraštruktúry.
+
+\subsection{Bezpečnostné hrozby e-mailovej komunikácie}
+
+Elektronická pošta patrí medzi najčastejšie využívané komunikačné služby internetu, 
+avšak zároveň predstavuje jeden z najvýznamnejších vektorov kybernetických útokov. 
+Útočníci často zneužívajú e-mailovú komunikáciu na šírenie nevyžiadaných správ, 
+phishingových kampaní, podvodných odkazov alebo škodlivého softvéru. 
+Tieto hrozby môžu viesť k finančným stratám, poškodeniu reputácie organizácií 
+alebo kompromitácii citlivých údajov používateľov \cite{karim2019spam}.
+
+\textbf{Spam}
+
+Spam predstavuje rozosielanie nevyžiadaných správ, ktoré sú vo väčšine prípadov 
+distribuované hromadne prostredníctvom e-mailových služieb. Takéto správy sú 
+často využívané na marketingové účely, avšak môžu byť zároveň súčasťou 
+sofistikovanejších útokov, ktorých cieľom je finančný zisk alebo poškodenie 
+používateľov a organizácií \cite{karim2019spam}.
+
+Spamové e-maily môžu obsahovať škodlivé odkazy, podvodné prílohy alebo sa môžu 
+pokúšať presvedčiť používateľa, aby vykonal určitú akciu, napríklad poskytol 
+citlivé informácie alebo navštívil podvodnú webovú stránku. V praxi je často 
+ťažké jednoznačne kategorizovať všetky typy spamových správ, pretože spam 
+predstavuje širokú skupinu rôznych typov útokov a podvodných aktivít 
+\cite{karim2019spam}.
+
+Motiváciou pre šírenie spamových správ je najčastejšie finančný zisk. 
+Útočníci využívajú spam napríklad na šírenie phishingových kampaní, 
+distribúciu škodlivého softvéru alebo propagáciu podvodných služieb. 
+Podľa niektorých odhadov môžu spameri dosahovať značné finančné zisky 
+prostredníctvom masového rozosielania spamových správ \cite{karim2019spam}.
+
+Spamové útoky môžu mať rôzne formy. Medzi najčastejšie patria správy 
+obsahujúce škodlivé odkazy, prílohy so škodlivým softvérom alebo pokusy 
+o phishing a spoofing. Niektorí útočníci sa dokonca snažia obchádzať 
+spamové filtre tým, že škodlivý text ukrývajú v obrázkoch alebo iných 
+multimediálnych prvkoch \cite{karim2019spam}.
+
+\textbf{Phishing}
+
+Typický priebeh útoku realizovaného prostredníctvom e-mailovej komunikácie
+je znázornený na obrázku \ref{fig:email_attack_model}.
+\begin{figure}[h]
+\centering
+\resizebox{\columnwidth}{!}{%
+\begin{tikzpicture}[
+    node distance=0.5cm,
+    every node/.style={font=\footnotesize},
+    block/.style={
+        draw,
+        rounded corners=4pt,
+        align=center,
+        minimum width=4.2cm,
+        minimum height=0.9cm,
+        inner sep=4pt
+    },
+    myarrow/.style={
+        -{Latex[length=2mm]},
+        thick
+    }
+]
+
+\node[block] (attacker) {Útočník};
+\node[block, below=of attacker] (email) {Podvodná e-mailová správa\\(spam, phishing alebo spoofing)};
+\node[block, below=of email] (delivery) {Doručenie správy\\do schránky používateľa};
+\node[block, below=of delivery] (interaction) {Interakcia používateľa\\otvorenie prílohy alebo kliknutie na odkaz};
+\node[block, below=of interaction] (execution) {Spustenie škodlivého obsahu\\alebo presmerovanie na podvodnú stránku};
+\node[block, below=of execution] (consequence) {Následok útoku\\krádež prihlasovacích údajov, infekcia systému\\alebo zašifrovanie súborov};
+
+\draw[myarrow] (attacker) -- (email);
+\draw[myarrow] (email) -- (delivery);
+\draw[myarrow] (delivery) -- (interaction);
+\draw[myarrow] (interaction) -- (execution);
+\draw[myarrow] (execution) -- (consequence);
+
+\end{tikzpicture}%
+}
+\caption{Model priebehu útoku prostredníctvom e-mailovej komunikácie}
+\label{fig:email_attack_model}
+\end{figure}
+
+Phishing predstavuje jednu z najrozšírenejších foriem e-mailových útokov. 
+Pri tomto type útoku sa útočník snaží oklamať používateľa tým, že sa 
+vydáva za dôveryhodnú organizáciu alebo známu osobu. Cieľom phishingu 
+je získať citlivé údaje používateľa, napríklad prihlasovacie údaje, 
+finančné informácie alebo osobné údaje \cite{karim2019spam}.
+
+Phishingové správy často obsahujú odkazy na podvodné webové stránky, 
+ktoré napodobňujú vzhľad legitímnych služieb. Používateľ je následne 
+vyzvaný na zadanie citlivých údajov, ktoré sú následne odoslané útočníkovi. 
+Phishingové útoky môžu byť realizované aj manipuláciou s hlavičkami 
+e-mailovej správy, napríklad úpravou polí \textit{From} alebo údajov 
+SMTP obálky tak, aby správa pôsobila dôveryhodne \cite{karim2019spam}.
+
+Útočníci môžu taktiež manipulovať s doménou uvedenou v príkaze 
+\textit{HELO/EHLO} počas SMTP komunikácie, čím sa snažia vytvoriť dojem, 
+že správa pochádza z legitímneho zdroja \cite{karim2019spam}.
+
+\subsubsection*{Spear phishing}
+
+predstavuje pokročilejšiu formu phishingového útoku, 
+ktorá je zameraná na konkrétneho jednotlivca alebo organizáciu. 
+Na rozdiel od bežného phishingu sú tieto útoky výrazne personalizované 
+a často využívajú informácie získané prostredníctvom sociálneho 
+inžinierstva \cite{karim2019spam}.
+
+Útočníci sa pri spear phishingu snažia vytvoriť e-mailovú správu, 
+ktorá pôsobí ako legitímna komunikácia od dôveryhodnej osoby alebo 
+organizácie. Personalizácia správy môže zahŕňať použitie mena 
+príjemcu, informácií o jeho pracovnej pozícii alebo detailov o 
+organizácii, v ktorej pracuje. Práve táto personalizácia výrazne 
+sťažuje detekciu takýchto útokov pomocou tradičných spamových filtrov 
+\cite{karim2019spam}.
+
+\subsubsection*{Whaling}
+
+Whaling je špecifická forma spear phishingu, ktorá je zameraná 
+na vysoko postavených zamestnancov organizácie, napríklad členov 
+manažmentu alebo vedúcich pracovníkov. Útočníci sa v takýchto 
+prípadoch snažia napodobniť komunikáciu od dôveryhodných osôb, 
+napríklad od generálneho riaditeľa alebo iného člena vedenia 
+organizácie \cite{karim2019spam}.
+
+Obsah takýchto e-mailov často vytvára dojem naliehavej situácie, 
+napríklad urgentnej finančnej transakcie alebo riešenia 
+zákazníckej sťažnosti. Takéto útoky môžu mať veľmi vážne 
+finančné dôsledky. V minulosti bolo zaznamenaných viacero 
+incidentov, pri ktorých organizácie prišli o milióny eur v 
+dôsledku sofistikovaných phishingových kampaní zameraných 
+na manažment spoločností \cite{karim2019spam}.
+
+\textbf{Spoofing odosielateľa}
+
+Spoofing odosielateľa predstavuje techniku, pri ktorej útočník
+manipuluje s informáciami v e-mailovej správe tak, aby vytvoril
+dojem, že správa pochádza od dôveryhodného zdroja. V praxi ide
+najčastejšie o úpravu údajov v hlavičke správy alebo v SMTP
+obálke, napríklad manipuláciou s poľom \textit{From} alebo
+inými identifikačnými údajmi odosielateľa\cite{karim2019spam}.
+
+Pri takomto útoku sa útočník snaží zamaskovať skutočný pôvod
+správy tak, aby sa správa javila ako odoslaná legitímnou
+organizáciou alebo známou osobou. Spoofing je často využívaný
+v kombinácii s phishingovými útokmi, kde cieľom útočníka je
+získať citlivé údaje používateľa alebo ho presvedčiť, aby
+vykonal určitú akciu, napríklad otvoril škodlivú prílohu alebo
+navštívil podvodnú webovú stránku\cite{karim2019spam}.
+
+Útočníci môžu manipulovať aj s údajmi prenášanými počas SMTP
+komunikácie, napríklad s doménou uvedenou v príkaze
+\textit{HELO/EHLO}. Takýmto spôsobom sa snažia vytvoriť dojem,
+že správa bola odoslaná z legitímneho servera alebo známej
+domény \cite{karim2019spam}.
+
+Spoofing je umožnený najmä historickým návrhom protokolu SMTP,
+ktorý pôvodne neobsahoval mechanizmy na overovanie identity
+odosielateľa. Tento nedostatok bol v priebehu času čiastočne
+riešený zavedením autentifikačných mechanizmov, ako sú
+Sender Policy Framework (SPF) alebo DomainKeys Identified
+Mail (DKIM), ktoré umožňujú overovať autenticitu odosielateľa
+\cite{karim2019spam}.
+
+\textbf{Distribúcia malvéru prostredníctvom e-mailu}
+
+Podľa študie sú e-mailové prílohy jedným z najčastejších
+spôsobov distribúcie ransomvéru a iného malvéru. Útočníci často
+maskujú škodlivé súbory ako bežné dokumenty alebo archívy,
+napríklad vo formátoch \texttt{ZIP}, \texttt{PDF}, \texttt{DOC} alebo
+\texttt{SCR}. Po otvorení takéhoto súboru sa v systéme používateľa
+vykoná škodlivý kód, ktorý môže napríklad stiahnuť ďalší malvér,
+získať neoprávnený prístup k systému alebo začať šifrovať súbory
+používateľa \cite{aurangzeb2017ransomware}
+
+Jedným z najrozšírenejších typov malvéru distribuovaných prostredníctvom
+e-mailu je ransomware. Tento typ škodlivého softvéru po infikovaní
+zariadenia zablokuje prístup k systému alebo zašifruje súbory
+používateľa a následne požaduje zaplatenie výkupného za ich
+obnovenie
+\cite{aurangzeb2017ransomware}. 
+
+Po úspešnom infikovaní systému môže malvér nadviazať spojenie
+so vzdialeným riadiacim serverom (Command and Control server),
+ktorý útočníkom umožňuje kontrolovať infikované zariadenie,
+získavať citlivé údaje alebo distribuovať ďalší škodlivý kód.
+Takéto infikované zariadenia môžu byť následne zapojené do
+botnetov, ktoré útočníci využívajú napríklad na šírenie ďalších
+spamových kampaní alebo na vykonávanie distribuovaných
+útokov typu Denial-of-Service \cite{aurangzeb2017ransomware}. 
+
+
+
+\textbf{Indikátory podozrivých e-mailov}
+
+Pri analýze e-mailovej komunikácie je možné identifikovať viacero
+indikátorov, ktoré môžu naznačovať, že správa je podozrivá alebo
+súčasťou phishingovej či spamovej kampane. Takéto indikátory sa môžu
+vyskytovať v hlavičke správy, v odkazoch obsiahnutých v tele správy
+alebo v samotnom obsahu e-mailu. Identifikácia týchto znakov predstavuje
+dôležitú súčasť analýzy e-mailovej komunikácie a využíva sa aj v
+systémoch detekcie phishingu a spamových správ \cite{jakobsson2007phishing,verma2017phishing}.
+
+\textbf{Indikátory v hlavičkách e-mailu.}
+Hlavičky e-mailovej správy obsahujú technické informácie o prenose
+správy medzi jednotlivými servermi. Analýza týchto údajov môže odhaliť
+nezrovnalosti alebo manipuláciu s identitou odosielateľa. Medzi
+časté indikátory patrí napríklad nesúlad medzi adresami uvedenými
+v poliach \textit{From} a \textit{Return-Path}, podozrivá alebo
+nezvyčajná reťaz serverov v záznamoch \textit{Received} alebo
+nezhoda medzi deklarovanou doménou odosielateľa a skutočným
+serverom, z ktorého bola správa odoslaná \cite{jakobsson2007phishing}.
+
+\textbf{Indikátory v URL odkazoch.}
+Phishingové správy často obsahujú odkazy na podvodné webové stránky.
+Tieto odkazy môžu využívať rôzne techniky na maskovanie skutočnej
+adresy cieľovej stránky. Medzi typické indikátory patrí použitie
+domén, ktoré sú vizuálne podobné známym službám (tzv. typosquatting),
+použitie IP adresy namiesto doménového mena alebo využívanie služieb
+na skracovanie URL adries, ktoré sťažujú identifikáciu skutočnej
+cieľovej stránky \cite{verma2017phishing}.
+
+\textbf{Indikátory v obsahu správy.}
+Samotný obsah e-mailovej správy môže taktiež obsahovať znaky
+naznačujúce potenciálne škodlivý charakter správy. Útočníci často
+využívajú naliehavý alebo manipulatívny jazyk, ktorým sa snažia
+prinútiť používateľa konať bez dôkladného overenia správy.
+Typickými príkladmi sú výzvy na okamžité zadanie prihlasovacích
+údajov, potvrdenie účtu alebo vykonanie finančnej transakcie
+\cite{jakobsson2007phishing}.
+
+\textbf{Podozrivé prílohy.}
+Ďalším častým indikátorom sú prílohy obsahujúce potenciálne
+škodlivý kód. Útočníci môžu distribuovať malware prostredníctvom
+dokumentov, archívov alebo spustiteľných súborov, ktoré po otvorení
+infikujú systém používateľa. Takéto prílohy sú často maskované
+ako faktúry, formuláre alebo iné legitímne dokumenty a predstavujú
+jednu z najčastejších metód šírenia škodlivého softvéru prostredníctvom
+e-mailovej komunikácie \cite{verma2017phishing}.
+
+Významným faktorom pri takýchto útokoch prostredníctvom e-mailu
+je aj využívanie sociálneho inžinierstva. Útočníci často vytvárajú
+správy, ktoré pôsobia dôveryhodne alebo naliehavo, napríklad
+ako faktúry, systémové upozornenia alebo bezpečnostné
+aktualizácie. Cieľom takýchto techník je prinútiť používateľa,
+aby vykonal požadovanú akciu bez dôkladného overenia
+dôveryhodnosti správy \cite{aurangzeb2017ransomware}. 
+
+\subsection{Mechanizmy ochrany elektronickej pošty}
+
+\subsubsection*{Sender Policy Framework (SPF)}
+
+je autentifikačný mechanizmus
+určený na detekciu a prevenciu spoofingu e-mailových adries.
+Ide o validačný protokol, ktorý umožňuje prijímajúcemu
+mailovému serveru overiť, či e-mail pochádza zo servera,
+ktorý je autorizovaný vlastníkmi danej domény
+\cite{karim2019spam}.
+
+Princíp SPF spočíva v publikovaní SPF záznamu v systéme
+DNS danej domény. Tento záznam obsahuje zoznam IP adries
+alebo serverov, ktoré sú oprávnené odosielať e-mailové
+správy v mene danej domény. Pri prijatí e-mailu prijímajúci
+server porovná IP adresu odosielajúceho servera so záznamom
+SPF uloženým v DNS. Ak sa IP adresa v zozname nenachádza,
+správa môže byť označená ako podozrivá alebo odmietnutá
+\cite{rfc7208}.
+
+SPF sa používa predovšetkým na overenie informácií v SMTP
+obálke a hlavičkách správy a predstavuje jeden z najrozšírenejších
+mechanizmov ochrany proti spoofingu e-mailových adries\cite{karim2019spam}.
+
+\subsubsection*{DomainKeys Identified Mail (DKIM)}
+ je kryptografický
+mechanizmus autentifikácie e-mailových správ, ktorý využíva
+digitálne podpisy na overenie integrity a pôvodu správy.
+DKIM umožňuje prijímajúcemu serveru overiť, že obsah
+správy nebol počas prenosu zmenený a že správa bola
+skutočne odoslaná z deklarovanej domény
+\cite{rfc6376}.
+
+Mechanizmus DKIM využíva asymetrickú kryptografiu
+založenú na dvojici kľúčov – verejnom a súkromnom kľúči.
+Odosielajúci server vytvorí digitálny podpis e-mailovej
+správy pomocou súkromného kľúča a tento podpis je následne
+pridaný do hlavičky správy. Prijímajúci server si následne
+z DNS záznamu domény odosielateľa vyžiada príslušný
+verejný kľúč a pomocou neho overí platnosť podpisu
+\cite{rfc6376}.
+
+Ak je podpis platný, prijímajúci server môže potvrdiť, že
+správa pochádza z deklarovanej domény a jej obsah nebol
+počas prenosu modifikovaný. DKIM tak výrazne zvyšuje
+dôveryhodnosť e-mailovej komunikácie a často sa používa
+v kombinácii s mechanizmom SPF.
+
+Napriek svojim výhodám DKIM nedokáže úplne zabrániť
+phishingovým útokom, pretože útočníci môžu registrovať
+vlastné domény a odosielať správy s platným podpisom.
+Z tohto dôvodu sa DKIM zvyčajne používa spolu s ďalšími
+mechanizmami ochrany elektronickej pošty
+\cite{karim2019spam}.\\
+
+
+\textbf{Blacklistové a reputačné systémy}
+
+Okrem autentifikačných mechanizmov, ako sú SPF alebo DKIM,
+sa pri ochrane elektronickej pošty využívajú aj blacklistové
+a whitelistové systémy. Tieto mechanizmy umožňujú identifikovať
+nedôveryhodných alebo naopak dôveryhodných odosielateľov
+na základe zoznamov IP adries alebo domén, ktoré sú
+centrálne spravované a pravidelne aktualizované.
+
+\subsubsection*{DNS blacklist}
+
+predstavuje databázu IP adries alebo
+domén, ktoré boli identifikované ako zdroj spamových správ.
+Pri tomto mechanizme e-mailový server vykoná dodatočný
+DNS dotaz na špecializovaný blacklistový server s cieľom
+overiť reputáciu odosielateľa. Ak sa IP adresa alebo doména
+odosielateľa nachádza v blacklist databáze, e-mailová správa
+môže byť automaticky odmietnutá alebo označená ako spam
+\cite{karim2019spam}.
+
+DNS blacklisty môžu fungovať dvoma hlavnými spôsobmi.
+Prvý spôsob spočíva v udržiavaní databázy IP adries
+mailových serverov, ktoré boli identifikované ako zdroj
+spamových správ alebo ako servery zneužívané na ich
+distribúciu \cite{karim2019spam}. Druhý prístup využíva
+identifikáciu spamových zdrojov na základe URI adries,
+najčastejšie domén alebo webových stránok, ktoré sú
+používané v spamových kampaniach \cite{karim2019spam}.
+
+Napriek svojej efektívnosti majú blacklistové systémy aj
+niekoľko obmedzení. Jedným z hlavných problémov je
+schopnosť útočníkov často meniť zdrojové IP adresy alebo
+domény, z ktorých sú spamové správy odosielané.
+Útočníci môžu napríklad využívať kompromitované
+zariadenia alebo botnety, čím výrazne sťažujú identifikáciu
+skutočného zdroja útoku \cite{karim2019spam}. Ďalším
+problémom je čas potrebný na aktualizáciu blacklist
+databáz. V prípade phishingových kampaní, ktoré využívajú
+krátkodobo existujúce domény, môže byť reakčný čas
+blacklist systémov nedostatočný \cite{karim2019spam}.
+
+\subsubsection*{Whitelist}
+
+predstavuje zoznam dôveryhodných mailových
+serverov alebo odosielateľov, ktorí sú považovaní za
+legitímne zdroje e-mailovej komunikácie. Správy
+odoslané z týchto serverov môžu byť doručované bez
+prísnej kontroly spamovými filtrami, čo znižuje
+pravdepodobnosť nesprávnej klasifikácie legitímnych
+správ ako spam.
+
+Whitelisty sú často spravované priamo organizáciami,
+ktoré do nich zaraďujú napríklad vlastné mailové
+servery, obchodných partnerov alebo overené služby.
+Používanie whitelistov môže zlepšiť efektivitu
+spamových filtrov a znížiť počet falošne pozitívnych
+detekcií \cite{karim2019spam}.
+
+Významným projektom v oblasti správy blacklistov
+a whitelistov je napríklad Spamhaus Project, ktorý
+vznikol v roku 1998. Tento projekt poskytuje databázy
+IP adries a domén spojených so spamovými aktivitami,
+ktoré využívajú mnohé internetové služby a e-mailové
+servery na znižovanie množstva spamových správ
+doručených používateľom \cite{karim2019spam}.
+
+\subsubsection*{Heuristické a pravidlové filtre}
+
+ predstavujú tradičný prístup k detekcii
+nevyžiadaných e-mailových správ. Tieto systémy sú založené
+na súbore vopred definovaných pravidiel, ktoré analyzujú
+jednotlivé časti e-mailovej správy, ako sú hlavička, predmet
+správy alebo samotný obsah e-mailu. Na základe výsledku
+týchto pravidiel je správe priradené určité skóre, ktoré sa
+porovnáva s definovanou prahovou hodnotou. Ak celkové
+skóre prekročí stanovený limit, správa je klasifikovaná ako
+spam \cite{karim2019spam}.
+
+\subsubsection*{Regex filtering.}
+Jednou z najčastejších implementácií heuristických filtrov je
+filtrovanie založené na regulárnych výrazoch (Regular
+Expressions – regex). Regulárne výrazy umožňujú definovať
+vzory textu, ktoré môžu indikovať prítomnosť spamového
+obsahu. Takéto pravidlá môžu napríklad identifikovať
+typické spamové frázy ako \textit{“selected winner”},
+ alebo \textit{“awarded lotteries”}.
+Ak e-mail obsahuje takéto výrazy, systém mu priradí určitú
+váhu a pri prekročení definovaného prahu môže byť správa
+označená ako spam \cite{jakobsson2007phishing}.
+
+\subsubsection*{Heuristic filtering.}
+Heuristické filtre analyzujú aj hlavičku e-mailovej správy,
+ktorá obsahuje informácie o pôvode, obsahu a prenose
+správy. Spammeri často manipulujú tieto údaje pomocou
+techník ako spoofing, aby správa pôsobila legitímne.
+Heuristické filtre dokážu takéto nezrovnalosti identifikovať
+napríklad kontrolou formátu hlavičky alebo analýzou
+reťazca serverov v záznamoch \textit{Received}
+\cite{jakobsson2007phishing,karim2019spam}.
+
+\subsubsection*{Content-based filtre}
+
+predstavujú metódu detekcie spamových
+správ založenú na analýze samotného obsahu e-mailovej
+správy. Tento prístup skúma text správy, predmet e-mailu
+alebo prípadné prílohy s cieľom identifikovať znaky typické
+pre spamové kampane \cite{karim2019spam}.
+
+Pri tomto prístupe sa jednotlivým slovám alebo frázam
+priraďuje určitá váha podľa toho, ako často sa vyskytujú
+v spamových správach. Následne sa vypočíta celkové skóre
+správy, ktoré sa porovnáva s vopred definovanou prahovou
+hodnotou. Ak výsledné skóre prekročí túto hodnotu,
+e-mailová správa je klasifikovaná ako spam
+\cite{karim2019spam}.
+
+Typickým príkladom sú pravidlové expertové systémy,
+ktoré využívajú zoznam charakteristických spamových
+kľúčových slov. Napríklad slová ako \textit{cheap},
+\textit{mortgage}  môžu byť
+považované za indikátory spamovej komunikácie a
+prispievajú k výslednému skóre správy
+\cite{karim2019spam}.
+
+Nevýhodou content-based filtrov je citlivosť na kontext.
+Systém môže označiť legitímny e-mail ako spam,
+ak obsahuje slová typické pre spamové správy,
+hoci sú použité v inom kontexte. Tento problém je
+známy ako \textit{false positive} detekcia.
+
+Content-based filtre sa od jednoduchých heuristických filtrov odlišujú tým,
+že sa zameriavajú na celkový význam a štatistické vlastnosti obsahu správy,
+nielen na prítomnosť izolovaných zakázaných výrazov.
+\subsubsection*{Kolaboratívne systémy}
+
+Kolaboratívne spamové filtre využívajú informácie získané
+od viacerých používateľov alebo e-mailových serverov.
+Základnou myšlienkou je, že spamové správy sú často
+rozosielané vo veľkom množstve identických alebo veľmi
+podobných e-mailov. Ak je určitá správa identifikovaná
+ako spam jedným používateľom alebo serverom, táto
+informácia môže byť zdieľaná s ostatnými systémami
+\cite{karim2019spam}.
+
+\subsection*{Hash sharing.}
+Pri tejto metóde sa z obsahu e-mailovej správy vypočíta
+kryptografický hash, ktorý slúži ako jedinečný identifikátor
+správy. Hash je alfanumerický reťazec, ktorý reprezentuje
+digitálny odtlačok správy. Poskytovatelia e-mailových služieb
+môžu tieto hodnoty ukladať do databáz a porovnávať ich
+s hash hodnotami nových prichádzajúcich správ. Ak sa hash
+hodnota zhoduje s hodnotou uloženou v databáze spamových
+správ, e-mail môže byť okamžite označený ako spam
+\cite{karim2019spam}.
+
+\subsubsection*{Distributed Checksum Clearinghouse (DCC)}predstavuje
+kolaboratívny systém na detekciu spamových správ.
+Systém vypočíta kontrolný súčet e-mailovej správy
+a ukladá ho do distribuovanej databázy. Pri každom
+ďalšom označení správy ako spam sa počet výskytov
+daného kontrolného súčtu zvyšuje. Ak je určitý kontrolný
+súčet zaznamenaný veľkým počtom používateľov,
+systém môže s vysokou pravdepodobnosťou identifikovať
+takúto správu ako spamovú kampaň \cite{jakobsson2007phishing,karim2019spam}.
+
+Nevýhodou týchto systémov je, že aj malá zmena v obsahu správy môže
+zmeniť výslednú hash hodnotu, čo útočníci využívajú pri obchádzaní
+takýchto mechanizmov.
+
+\textbf{Moderné metódy detekcie}
+
+S rastúcim objemom elektronickej komunikácie a čoraz sofistikovanejšími technikami spamových kampaní sa tradičné metódy filtrovania e-mailov, založené výlučne na statických pravidlách alebo blacklistoch, ukázali ako nedostatočné. Moderné systémy ochrany elektronickej pošty preto čoraz častejšie využívajú prístupy založené na strojovom učení (machine learning) a hlbokom učení (deep learning), ktoré umožňujú automaticky identifikovať vzory typické pre spamové správy a adaptovať sa na nové typy útokov \cite{karim2019spam}).
+
+\subsubsection*{Machine learning prístupy}
+predstavujú významný pokrok v oblasti detekcie spamu, pretože umožňujú automatickú klasifikáciu e-mailových správ na základe analýzy rôznych charakteristík správy. Takéto systémy sú založené na trénovaní klasifikačných modelov na označených datasetoch, ktoré obsahujú príklady legitímnych e-mailov (ham) a spamových správ. Model následne dokáže identifikovať pravdepodobnosť, že nová správa patrí do jednej z týchto kategórií\cite{karim2019spam}.
+
+Pri klasifikácii e-mailov sa využívajú rôzne typy príznakov, medzi ktoré patria napríklad obsah správy, frekvencia výskytu slov, štruktúra e-mailu, prítomnosť URL adries alebo informácie z hlavičky správy. Medzi najčastejšie používané algoritmy strojového učenia patria napríklad Support Vector Machines, Random Forest alebo logistická regresia. Tieto modely dokážu identifikovať komplexné vzory v dátach a dosahujú vysokú presnosť pri detekcii spamových správ \cite{karim2019spam}.
+
+
+\subsubsection*{Naive Bayes klasifikátor}
+
+je jednou z najpoužívanejších metód strojového učenia pri detekcii spamu je Naive Bayes klasifikátor. Tento algoritmus je založený na Bayesovej pravdepodobnostnej teórii a predpoklade nezávislosti jednotlivých príznakov. V kontexte filtrovania e-mailov sa Naive Bayes používa na výpočet pravdepodobnosti, že daná správa je spam na základe výskytu určitých slov alebo charakteristík v texte e-mailu\cite{karim2019spam}.
+
+Model je trénovaný na veľkom množstve e-mailových správ, z ktorých sa vypočítava pravdepodobnosť výskytu jednotlivých slov v spamových a legitímnych správach. Pri analýze novej správy algoritmus vypočíta pravdepodobnosť jej zaradenia do každej kategórie a následne ju klasifikuje ako spam alebo legitímny e-mail. Výhodou tejto metódy je jej relatívna jednoduchosť, nízka výpočtová náročnosť a vysoká efektivita pri spracovaní veľkého množstva e-mailov\cite{karim2019spam}.
+
+\subsubsection*{Deep learning prístupy.}
+
+V posledných rokoch sa v oblasti detekcie spamových e-mailov čoraz viac uplatňujú aj metódy hlbokého učenia. Deep learning využíva neurónové siete s viacerými vrstvami, ktoré dokážu automaticky extrahovať komplexné reprezentácie dát bez potreby manuálneho definovania príznakov. Tieto modely dokážu analyzovať nielen jednotlivé slová, ale aj kontext a vzťahy medzi nimi\cite{karim2019spam}.
+
+Medzi často používané architektúry patria napríklad konvolučné neurónové siete (CNN) alebo rekurentné neurónové siete (RNN), ktoré sú vhodné na spracovanie textových dát. Deep learning modely dokážu identifikovať komplexné jazykové vzory a štruktúry typické pre spamové správy, čím zvyšujú presnosť detekcie v porovnaní s tradičnými metódami. Napriek tomu však vyžadujú väčšie množstvo tréningových dát a vyšší výpočtový výkon \cite{karim2019spam}.
+
+V súčasnosti sa moderné systémy ochrany elektronickej pošty často opierajú o hybridné riešenia, ktoré kombinujú tradičné mechanizmy, ako sú blacklisty alebo heuristické pravidlá, s pokročilými metódami strojového učenia a hlbokého učenia. Takýto viacvrstvový prístup umožňuje efektívnejšie identifikovať spamové správy a reagovať na nové formy e-mailových hrozieb\cite{karim2019spam}.
+
+
+\subsection{Analýza existujúcich nástrojov}
+
+\textbf{MailHog} je open-source nástroj určený predovšetkým na testovanie emailových aplikácií počas vývoja. Zachytáva odosielané emaily pomocou lokálneho SMTP servera a umožňuje ich zobrazenie prostredníctvom webového rozhrania. Vývojári tak môžu testovať odosielanie emailov bez rizika, že budú skutočne doručené externým používateľom \cite{mailhog}.
+
+\textbf{GoPhish} je open-source framework určený na simuláciu phishingových kampaní. Umožňuje vytvárať phishingové emaily, pristávacie stránky a sledovať interakcie používateľov, napríklad kliknutia na odkazy alebo zadanie prihlasovacích údajov. Nástroj sa často využíva pri bezpečnostných školeniach a testovaní povedomia používateľov o phishingových útokoch \cite{gophish}.
+
+\textbf{PhishTool} je platforma zameraná na analýzu phishingových emailov a podporu reakcie na bezpečnostné incidenty. Umožňuje bezpečnostným analytikom zhromažďovať, analyzovať a kategorizovať phishingové správy. Systém poskytuje nástroje na extrakciu indikátorov kompromitácie (IOC), analýzu hlavičiek emailov a spoluprácu medzi členmi bezpečnostného tímu \cite{phishtool}.
+
+Napriek tomu PhishTool neposkytuje automatizovanú klasifikáciu alebo rozhodovanie na základe kombinácie heuristických a modelových prístupov. Systém funguje primárne ako analytická pomôcka, ktorá vizualizuje jednotlivé indikátory a ponecháva finálne rozhodnutie na používateľovi. Identifikované nezrovnalosti sú prezentované izolovane bez komplexného skórovania alebo agregovaného vyhodnotenia rizika.
+
+Na Obr.~\ref{fig:phishtool_auth} je zobrazený príklad autentifikačnej analýzy, kde všetky mechanizmy (SPF, DKIM, DMARC) dosahujú stav \textit{PASS}. Takýto výsledok môže viesť k dojmu legitimity správy, aj keď iné indikátory môžu naznačovať potenciálne riziko.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\columnwidth]{phishtool_auth.png}
+\caption{Autentifikačné výsledky (SPF, DKIM, DMARC) v nástroji PhishTool}
+\label{fig:phishtool_auth}
+\end{figure}
+
+Na Obr.~\ref{fig:phishtool_display} je zobrazená detekcia nekonzistentného zobrazovaného mena (\textit{display-name}), kde nástroj upozorňuje na nesúlad medzi názvom odosielateľa a emailovou adresou. Tento indikátor je prezentovaný ako samostatné upozornenie bez ďalšieho kontextu alebo kvantifikácie rizika.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\columnwidth]{phishtool_display.png}
+\caption{Detekcia nekonzistentného display-name}
+\label{fig:phishtool_display}
+\end{figure}
+
+Obr.~\ref{fig:phishtool_returnpath} ukazuje nesúlad medzi doménou \texttt{Return-Path} a doménou odosielateľa (\texttt{From}). Aj keď ide o relevantný indikátor potenciálneho spoofingu, PhishTool ho opäť prezentuje len ako izolované upozornenie.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\columnwidth]{phishtool_returnpath.png}
+\caption{Nesúlad domény Return-Path a From}
+\label{fig:phishtool_returnpath}
+\end{figure}
+
+Tieto príklady ilustrujú hlavné obmedzenie nástroja: jednotlivé indikátory sú síce detegované korektne, avšak nie sú agregované do jednotného rozhodnutia ani skóre rizika. Na rozdiel od navrhnutého riešenia tak chýba schopnosť automaticky kombinovať viacero signálov a vyhodnotiť ich v kontexte, čo je kľúčové pre robustnú detekciu phishingových kampaní.
+
+\paragraph{Príklad nalýza konkrétneho e-mailu}
+
+Na základe analyzovaného e-mailu (pozri \ref{fig:phishtool_auth}--\ref{fig:phishtool_returnpath}) je možné detailne ilustrovať správanie nástroja PhishTool a zároveň poukázať na limity čisto indikátorového prístupu.
+
+Z pohľadu autentifikačných mechanizmov e-mail vykazuje konzistentné výsledky:
+SPF, DKIM aj DMARC validácie sú úspešné (\textit{PASS}), čo znamená,
+že správa bola odoslaná zo serverov autorizovaných doménou
+\texttt{packeta.sk} a jej obsah nebol po ceste modifikovaný.
+Takýto výsledok je typický pre legitímne transakčné e-maily a
+predstavuje silný signál dôveryhodnosti.
+
+Napriek tomu PhishTool identifikuje viaceré čiastkové nezrovnalosti.
+Konkrétne ide o:
+a) nekonzistentný display-name,
+b) nesúlad medzi doménou \texttt{Return-Path} (\texttt{mg.packeta.sk})
+a doménou odosielateľa (\texttt{packeta.sk}).
+
+Tieto indikátory sú však v tomto prípade vysvetliteľné legitímnym spôsobom.
+Použitie subdomény \texttt{mg.packeta.sk} súvisí s využitím služby
+Mailgun na hromadné odosielanie e-mailov, kde je bežné používať
+odlišný \texttt{Return-Path} pre správu bounce správ.
+Rovnako display-name „Packeta Slovakia“ je konzistentný s doménou
+odosielateľa a nepredstavuje reálny pokus o spoofing.
+
+Obsahová analýza e-mailu taktiež podporuje jeho legitimitu.
+Správa obsahuje konkrétne informácie o zásielke (identifikátor,
+miesto doručenia, stav „zaplatené“) a neobsahuje typické znaky
+phishingu ako výzvy na zadanie prihlasovacích údajov, urgentné
+výzvy na akciu alebo podozrivé odkazy.
+Text je konzistentný, jazykovo korektný a zodpovedá štandardným
+notifikačným e-mailom logistických služieb. :contentReference[oaicite:0]{index=0}
+
+Z pohľadu celkového vyhodnotenia ide teda o \textbf{legitímny transakčný e-mail},
+ktorý však obsahuje niektoré technické anomálie bežné v moderných
+mailingových infraštruktúrach.
+
+Tento príklad poukazuje na zásadný problém izolovaného heuristického
+prístupu: jednotlivé indikátory môžu signalizovať potenciálne riziko,
+avšak bez kontextu vedú k falošným pozitívam. PhishTool tieto indikátory
+správne deteguje, no neposkytuje mechanizmus na ich agregáciu ani
+interpretáciu v širšom kontexte.
+
+Naopak, navrhnutý systém kombinuje heuristiky s modelom strojového učenia,
+čo umožňuje zohľadniť kontext správy a správne klasifikovať takýto e-mail
+ako legitímny aj napriek prítomnosti čiastkových anomálií.
+
+\section{Experimentálna časť}
+\subsection{Návrh experimentálneho prostredia a zberu emailových dát}
+Pre potreby experimentálnej časti práce bolo navrhnuté a implementované lokálne testovacie prostredie na platforme Windows s využitím nástroja Docker Compose. Cieľom bolo vytvoriť reprodukovateľné prostredie, v ktorom bude možné simulovať phishingové kampane, zachytávať doručené správy a následne ich analyzovať heuristickými aj modelovými metódami.
+
+V prostredí boli nasadené dve hlavné služby. Prvou službou bol MailHog, ktorý slúžil ako lokálny SMTP server a zároveň poskytoval webové používateľské rozhranie a API na čítanie prijatých správ. MailHog bol sprístupnený na portoch 1025 pre SMTP komunikáciu a 8025 pre webové rozhranie. Druhou službou bol GoPhish, ktorý bol použitý na správu a spúšťanie testovacích phishingových kampaní. GoPhish bol nakonfigurovaný s administrátorským rozhraním na porte 3333 a phishing serverom na porte 8080.
+
+V rámci laboratórneho nasadenia bola v GoPhish použitá lokálna konfigurácia bez TLS, konkrétne s nastaveniami ADMIN\_USE\_TLS=false a PHISH\_USE\_TLS=false. Tento prístup bol zvolený zámerne, keďže cieľom nebolo nasadenie do produkčného prostredia, ale jednoduché a transparentné testovanie v izolovanom lokálnom prostredí. SMTP profil v GoPhish bol nastavený na adresu mailhog:1025 pod profilom MailHog Local, čím bolo zabezpečené, že všetky odoslané správy z kampaní budú doručené do MailHog a budú dostupné na ďalšie spracovanie.
+
+\textbf{Príprava vstupných datasetov}
+
+Ďalším krokom bolo zostavenie vhodného dátového základu pre tréning a testovanie navrhovaných klasifikačných modelov. Vstupné datasety boli získané z verejne dostupných zdrojov na platforme Kaggle. Použité boli viaceré emailové kolekcie, ktoré sa líšili pôvodom, štruktúrou aj typom anotácie. Medzi hlavné zdroje patrili napríklad Enron, SpamAssassin, CEAS\_08, phishing\_email, Nazario, Nigerian\_Fraud a ďalšie.
+
+Už po stiahnutí a základnej kontrole dát sa ukázalo, že jednotlivé datasety sú výrazne nevyvážené a zároveň heterogénne z pohľadu obsahu aj označenia tried. Niektoré datasety obsahovali kombináciu legitímnych a škodlivých správ označených binárnym alebo viackategóriovým labelom, zatiaľ čo iné boli špecializované len na konkrétny typ správ. Napríklad dataset \textit{Nazario} obsahoval prakticky výlučne phishingové správy a dataset \textit{Nigerian\_Fraud} bol zameraný na správy reprezentujúce finančné podvody.
+
+Významný problém predstavovalo aj to, že zastúpenie jednotlivých zdrojov v celkovom datasete nebolo rovnomerné. Dominantnú časť tvorili správy z datasetu Enron, zatiaľ čo viaceré ostatné zdroje boli zastúpené len v malom percente. Takáto nerovnováha mohla viesť k tomu, že model by sa počas tréningu učil skôr špecifické štýlové alebo zdrojové charakteristiky konkrétnych datasetov než všeobecné znaky phishingových a podvodných emailov.
+
+Percentuálne zastúpenie jednotlivých zdrojov po stiahnutí datasetov je znázornené na obrázku~\ref{fig:download_dataset_distribution}. Z grafu je zrejmé, že dataset Enron tvorí dominantnú časť dátovej základne, pričom ostatné datasety majú výrazne menší podiel.
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=1\linewidth]{download_dataset_distribution_pie.pdf}
+    \caption{Percentuálne zastúpenie jednotlivých zdrojových datasetov po stiahnutí}
+    \label{fig:download_dataset_distribution}
+\end{figure}
+
+
+\textbf{Normalizácia a unifikácia dátovej schémy}
+
+Na základe tejto analýzy z predchadzajúcej kapitoly bolo potrebné v ďalších realizovať čistenie dát, zjednotenie schémy, deduplikáciu a návrh takých tréningových scenárov, ktoré by obmedzili vplyv nerovnováhy a zdrojového skreslenia na výsledný model.
+
+Na tento účel bol implementovaný prípravný pipeline, ktorého úlohou bolo načítať vstupné CSV súbory z rôznych datasetov, vyčistiť textové polia, odstrániť neplatné a duplicitné záznamy a zjednotiť výsledok do spoločnej schémy. Dôležitou metodickou vlastnosťou finálnej verzie pipeline bolo oddelenie \textbf{modelového textu} a \textbf{surových polí}. Modelový text (
+\texttt{subject}, \texttt{body}, \texttt{text}) bol určený pre textovú reprezentáciu modelu, zatiaľ čo surové polia (
+\texttt{subject\_raw}, \texttt{body\_raw}, \texttt{text\_raw} a surové hlavičky) zostali zachované pre audit a extrakciu technických indikátorov.
+
+Tento dvojitý zápis sa ukázal ako dôležitý nielen z hľadiska transparentnosti, ale aj z hľadiska korektnej extrakcie príznakov. V neskoršej iterácii experimentov sa totiž ukázalo, že časť nových URL a header feature mala v niektorých tréningových scenároch takmer nulové pokrytie, hoci v zdieľanom datasete boli príslušné informácie dostupné. Pipeline preto bola upravená tak, aby sa pri konštrukcii scenárov zachoval modelový text použitý na tréning, ale zároveň sa doplnili chýbajúce surové polia potrebné pre feature extraction.
+
+Konkrétne pri scenároch typu M sa surové tréningové polia obohacovali zo zdieľaného súboru \texttt{shared/train\_full.csv} podľa identifikátorov \texttt{row\_id} a \texttt{synthetic\_parent\_row\_id}. Takýto backfill nemenil text, na ktorom sa model učil, ale zvyšoval pokrytie technických príznakov používaných v heuristickej aj modelovej vrstve. Tým sa podarilo korektne zachytiť napríklad indikátory \texttt{display\_name\_spoof\_flag}, \texttt{message\_id\_domain\_mismatch}, \texttt{external\_domain\_url\_count}, \texttt{sender\_url\_domain\_mismatch\_ratio}, \texttt{obfuscated\_url\_count}, \texttt{mismatched\_anchor\_count} a \texttt{punycode\_url\_count}.
+
+Normalizácia zahŕňala najmä:
+\begin{itemize}
+    \item odstránenie nadbytočných whitespace znakov,
+    \item zjednotenie koncov riadkov,
+    \item odstránenie technického šumu z hlavičiek vložených do tela správ,
+    \item nahradenie URL, emailových adries a čísel špeciálnymi tokenmi, napríklad <URL>, <EMAIL> a <NUM>,
+    \item základné čistenie textu od neštandardných znakov.
+\end{itemize}
+
+Týmto spôsobom sa znižovalo riziko, že model sa naučí nerelevantné povrchové vzory viazané na konkrétne adresy, domény alebo identifikátory správ. Súčasne sa vytvoril priestor pre robustnejšie porovnanie modelov naprieč rôznymi scenármi.
+
+V počiatočnej fáze práce bol použitý klasický prístup: zlúčenie viacerých verejných emailových zdrojov, čistenie, deduplikácia a následné rozdelenie na tréningový, validačný a testovací split. Tento prístup bol metodicky funkčný a viedol k vysokým metrikám na štandardnom teste, avšak ďalšie analýzy ukázali, že takéto výsledky môžu byť čiastočne nafúknuté prítomnosťou skratkovitých signálov, ktoré nesúvisia priamo so semantikou emailu.
+
+Ako kritický problém sa ukázalo najmä source leakage a template leakage. V praxi to znamená, že model sa mohol naučiť rozpoznávať zdroj datasetu alebo typickú šablónu kampane namiesto všeobecných znakov phishingu, spamu alebo finančného podvodu. Indikáciou tohto problému boli:
+\begin{itemize}
+    \item veľmi vysoké výsledky na jednoduchom IID teste,
+    \item výrazné rozdiely pri testovaní na robustnejších splitoch,
+    \item vysoká source purity niektorých zdrojov,
+    \item dobré výsledky aj pri baseline modeloch, ktoré mali prístup len k metadátam alebo informácii o zdroji.
+\end{itemize}
+
+Na elimináciu týchto problémov bola pipeline postupne rozšírená o viacero obranných mechanizmov. Najprv bola zavedená silnejšia textová normalizácia, následne source-aware spracovanie, explicitné limitovanie dominantných zdrojov, tokenové maskovanie výrazov prezrádzajúcich pôvod datasetu a napokon aj template-aware splitovanie a template-aware regulácia tréningových scenárov. V záverečnej iterácii pribudla aj SHAP-guided kontrola feature priestoru, ktorá umožnila rozlíšiť, ktoré ručne definované príznaky prinášajú reálny prínos a ktoré sú v danom scenári prakticky neaktívne.
+
+Výsledkom nebol jeden jediný dataset, ale sada tréningových scenárov A–M, ktoré zdieľali spoločné evaluačné splity a líšili sa iba stratégiou konštrukcie tréningovej množiny. Takýto návrh umožnil systematicky skúmať, ktoré opatrenia majú pozitívny vplyv na robustnosť modelu a ktoré naopak vedú len k optickému zlepšeniu metrík.
+
+\textbf{Návrh spoločných evaluačných splitov}
+
+Jednou z najdôležitejších metodických zmien bolo zavedenie zdieľaných splitov, ktoré sú spoločné pre všetky scenáre. Vďaka tomu bolo možné férovo porovnávať jednotlivé tréningové stratégie, keďže rozdiely vo výsledkoch nevznikali z iného náhodného rozdelenia dát, ale priamo zo spôsobu konštrukcie tréningovej množiny. Finálna verzia prípravného skriptu preto pri vytváraní scenára už negenerovala nové splity, ale explicitne \textbf{reused existujúce train/val/test rozdelenie} a menila len pravidlá konštrukcie tréningovej časti.
+
+Takto navrhnuté rozdelenie má viacero výhod. Sedemdesiatpäť percent dát v train\_pool poskytuje dostatok variability na učenie rozhodovacích hraníc aj pri minoritných triedach. Desaťpercentný validačný split je dostatočne veľký na stabilný model selection, no zároveň neuberá príliš veľa tréningových dát. Desaťpercentný IID test zabezpečuje porovnateľnosť s bežnou literatúrou, zatiaľ čo deployment a hard splity poskytujú realistickejší obraz o generalizácii mimo komfortnej distribúcie.
+\begin{table}[H]
+\centering
+\caption{Rozdelenie datasetu na tréningové, validačné a testovacie splity}
+\label{tab:split_design}
+\footnotesize
+\setlength{\tabcolsep}{3pt}
+\renewcommand{\arraystretch}{1.1}
+\begin{tabular}{|l|p{4.8cm}|c|}
+\hline
+\textbf{Split} & \textbf{Charakteristika} & \textbf{Pomer} \\
+\hline
+train\_pool & Základná množina pre tréning modelov a tvorbu scenárov & 0.75 \\
+val\_iid & Validačný split na výber modelu a ladenie hyperparametrov & 0.10 \\
+test\_iid & Test so zachovanou distribúciou dát (IID) pre benchmark & 0.10 \\
+test\_deployment & Test simulujúci reálne nasadenie modelu & 0.05 \\
+test\_hard\_source & Test robustnosti pri zmene zdrojového datasetu & 0.02 \\
+test\_hard\_cluster & Test robustnosti pri zmene šablón/clusterov & 0.02 \\
+\hline
+\end{tabular}
+\end{table}
+
+Osobitný význam majú splity test\_hard\_source a test\_hard\_cluster. Tie fungujú ako stress test modelu. Ich cieľom nie je nahradiť hlavný benchmark, ale odhaliť, či model ostáva funkčný aj pri zmene zdroja alebo pri nových šablónach emailov. Práve tieto splity umožnili lepšie odlíšiť modely, ktoré sa učia všeobecné znaky útoku, od modelov, ktoré sa spoliehajú na datasetové artefakty.
+
+\textbf{Evolúcia scenárov A--M}
+\begin{table*}[!b]
+\centering
+\caption{Evolúcia scenárov A--M: mechanizmus, prínos a hlavné obmedzenia}
+\label{tab:scenarios_a_m}
+\footnotesize
+\setlength{\tabcolsep}{4pt}
+\renewcommand{\arraystretch}{1.1}
+\begin{tabular}{|c|p{4.2cm}|p{5.2cm}|p{5.2cm}|}
+\hline
+\textbf{Scenár} & \textbf{Čo sa menilo} & \textbf{Čo fungovalo} & \textbf{Hlavný problém / riziko} \\
+\hline
+A & Strict balanced train (rovnaký počet vzoriek na triedu) & Stabilný tréning, vyvážené triedy & Umelá distribúcia; nízka podobnosť s reálnym nasadením \\
+B & Full train + implicitné váhovanie tried & Lepšie využitie dát, silný baseline & Dominancia zdrojov; pretrváva source leakage \\
+C & Capped train (obmedzenie veľkých tried) & Zníženie prevahy majority tried & Nerieši source ani template leakage \\
+D & Oversampled balanced train & Lepší recall minoritných tried & Overfitting na duplicity a syntetické vzory \\
+E & Syntetická augmentácia vybraných tried & Pomoc pre minority triedy & Riziko synthetic signature \\
+F & Mild rebalance + LLM augmentácia & Väčšia textová variabilita & Nekonzistentná kvalita generovaných vzoriek \\
+G & Source-balanced train (cap podľa zdrojov) & Zníženie dominancie veľkých zdrojov & Časť source shortcutov zostáva \\
+H & Anti-source token sanitization & Redukcia explicitných dataset markerov & Nerieši template leakage \\
+I & Strict source cap & Lepšia robustnosť voči source shiftu & Strata časti kvalitných dát \\
+J & Limit dominancie zdroja v triede & Silný baseline na hard splitoch & Model sa môže učiť template vzory \\
+K & Drop high-leak sources & Výrazné potlačenie leakage & Nižšia variabilita dát \\
+L & Kombinovaný anti-source (K+J+I+H) + hard-legit injection & Silný anti-shortcut baseline & Pretrváva template leakage a feature shortcuty \\
+M & L + anti-template regulácia + feature dropout + synthetic mix & Najvyššia robustnosť (source + template) & Mierny pokles surových metrík \\
+\hline
+\end{tabular}
+\end{table*}
+Jednotlivé experimentálne scenáre boli navrhnuté ako postupná evolúcia od základných sampling stratégií až po metodicky prísne anti-leak konfigurácie. Ich cieľom nebolo iba maximalizovať klasické metriky (napr. accuracy), ale predovšetkým analyzovať, ako rôzne zásahy do dát ovplyvňujú robustnosť modelu a jeho schopnosť generalizovať mimo tréningovej distribúcie.
+
+Pre zachovanie férového porovnania všetky scenáre využívali rovnaké validačné a testovacie splity; líšili sa výlučne zložením tréningovej množiny. Prehľad jednotlivých scenárov vrátane ich mechanizmu, prínosu a hlavných obmedzení je uvedený v tabuľke~\ref{tab:scenarios_a_m}.
+
+
+
+Scenáre A--D predstavujú základné prístupy k riešeniu nerovnováhy tried v dátach. Zahŕňajú striktne vyvážený tréningový set, využitie celého datasetu s implicitným váhovaním, obmedzenie veľkých tried (capped train) a oversampling minoritných tried. Tieto prístupy umožnili analyzovať vplyv distribúcie tried na výkon modelu, avšak samy osebe neriešili problém tzv. dataset leakage, najmä závislosti od zdroja alebo šablóny emailu.
+
+Scenáre E a F rozširujú pipeline o syntetickú augmentáciu dát, vrátane využitia LLM modelov. Tento prístup priniesol zvýšenie variability textov a zlepšenie výsledkov na minoritných triedach. Na druhej strane sa ukázalo, že model sa môže naučiť rozpoznávať charakteristické znaky generovaných dát (tzv. synthetic signature), čo znižuje jeho schopnosť generalizácie na reálne dáta. Z tohto dôvodu boli tieto scenáre vnímané skôr ako experimentálne než ako finálne riešenie.
+
+Nasledujúce scenáre (G--K) sa zameriavajú na elimináciu source leakage. Scenár G zavádza vyváženie podľa zdrojov, čím sa znižuje dominancia veľkých datasetov. Scenár H dopĺňa textovú normalizáciu (token sanitization), ktorá odstraňuje explicitné znaky prezrádzajúce pôvod dát. Scenáre I a J ďalej sprísňujú obmedzenia na zastúpenie jednotlivých zdrojov, pričom scenár J zavádza limit dominancie zdroja v rámci triedy. Scenár K ide ešte ďalej a úplne odstraňuje vybrané high-leak zdroje, ktoré vykazovali silné datasetové artefakty.
+
+Scenár L predstavuje kombinovaný anti-source prístup, ktorý integruje viacero predchádzajúcich techník (K+J+I+H).Tento scenár sa ukázal ako veľmi silný baseline z hľadiska robustnosti voči source-based shortcutom.
+
+Ďalšia analýza však odhalila, že aj pri eliminácii source leakage môže model využívať tzv. template leakage, teda učiť sa špecifické štruktúry alebo šablóny emailových kampaní. Zároveň sa ukázala potenciálna závislosť na niektorých ručne navrhnutých (engineered) príznakoch, najmä z emailových hlavičiek.
+
+Z tohto dôvodu bol navrhnutý finálny scenár M, označený ako \textit{anti-template feature-regularized}. Tento scenár rozširuje anti-leak prístup o ďalšie mechanizmy:
+
+\begin{itemize}
+    \item limit počtu vzoriek na template (cluster\_id) v rámci každej triedy,
+    \item obmedzenie kombinácie template + source,
+    \item label-aware syntetickú augmentáciu s kontrolovaným podielom,
+    \item feature dropout na príznakoch náchylných na shortcuty.
+\end{itemize}
+
+Variant M predstavuje metodicky najprísnejší prístup, pretože cielene obmedzuje nielen source leakage, ale aj template leakage a závislosť modelu od povrchových technických znakov. Aj keď môže dochádzať k miernemu poklesu niektorých surových metrík, tento scenár poskytuje najlepší predpoklad pre robustnú generalizáciu modelu v reálnych podmienkach.
+
+\textbf{Feature engineering a heuristické signály}
+
+Okrem textovej reprezentácie emailov boli extrahované aj základné číselné príznaky založené na hlavičkách a obsahu správ. Zahŕňali napríklad charakteristiky URL (počet odkazov, skrátené URL, unikátne domény), nesúlad medzi identitami odosielateľa (\textit{From}, \textit{Reply-To}, \textit{Return-Path}), výskyt podozrivých TLD a indikátory typosquattingu. Súčasťou boli aj jednoduché obsahové signály, ako počty kľúčových slov (urgentné, autentifikačné, finančné) a štatistiky textu (pomer veľkých písmen, číslic, výkričníkov).
+
+Tieto príznaky boli využité jednak v heuristickom skórovaní, jednak ako doplnkové vstupy v hybridných modeloch. Z dôvodu obmedzenia závislosti modelu od týchto príznakov bol v pokročilých scenároch aplikovaný prístup feature regularization a čiastočný feature dropout.
+
+V neskoršej fáze práce bol feature priestor auditovaný pomocou SHAP analýzy. Tá ukázala, že časť ručne navrhnutých príznakov neprináša v generalistickom scenári M reálny zisk, pretože je v tréningových dátach prakticky neaktívna alebo redundatná. Finálny general/offline model preto nevyužíva celý pôvodný zoznam numerických príznakov, ale iba SHAP-guided subset 11 najužitočnejších feature. Medzi najstabilnejšie zostávajúce príznaky patrili najmä \texttt{subject\_len}, \texttt{uppercase\_ratio}, \texttt{digit\_ratio}, \texttt{sender\_receiver\_domain\_mismatch}, \texttt{financial\_keyword\_count}, \texttt{exclamation\_count} a ďalšie frekvenčné alebo štylistické indikátory.
+
+\textbf{Tréning modelov a porovnávané architektúry}
+
+Na klasifikáciu emailov boli použité predovšetkým lineárne modely vhodné pre sparse textové reprezentácie. Ich hlavnými výhodami sú rýchlosť tréningu, nízka pamäťová náročnosť, stabilita a dobrá interpretovateľnosť. V experimentoch boli porovnávané najmä nasledujúce architektúry:
+
+\begin{itemize}
+    \item hybrid\_logreg,
+    \item hybrid\_linear\_svc\_cal,
+    \item hybrid\_sgd\_log,
+    \item hybrid\_sgd\_hinge.
+\end{itemize}
+
+Okrem samotného lineárneho klasifikátora boli neskôr testované aj rôzne rozhodovacie hlavy nad rovnakou textovo-feature reprezentáciou. Základnou voľbou bol multiclass single-stage model, ktorý priamo predikuje jednu zo štyroch cieľových tried. Pre špecializované campaign benchmarky bol následne doplnený aj variant s \textit{one-vs-rest} subclass hlavou, ktorý po binárnom oddelení triedy \texttt{legit} samostatne skóruje triedy \texttt{phishing}, \texttt{spam} a \texttt{financial\_fraud}. Tento OVR prístup sa ukázal ako užitočný najmä v situáciách, kde pôvodný multiclass model kolaboval viaceré škodlivé triedy do jednej dominantnej kategórie.
+
+\textbf{Výber vstupnej reprezentácie}
+
+Kľúčovým rozhodnutím pri návrhu klasifikačného modelu bolo určenie vhodnej vstupnej reprezentácie emailových správ. V počiatočných experimentoch boli analyzované redukované pohľady na dáta, konkrétne \texttt{header\_only}, \texttt{subject\_only} a \texttt{body\_only}. Tieto varianty umožnili pochopiť, aký typ informácie nesie najväčší diskriminačný signál.
+
+Finálne experimenty však ukázali, že najlepší výkon poskytuje kombinovaný vstup \texttt{text\_plus\_features}, ktorý spája textový obsah správy (predmet a telo emailu) s odvodenými číselnými príznakmi založenými na hlavičkách a štruktúre správy. Tento prístup umožňuje modelu využívať nielen sémantický obsah, ale aj doplnkové heuristické signály relevantné z pohľadu emailovej bezpečnosti.
+
+Porovnanie jednotlivých vstupných reprezentácií pre tuned single-stage model scenára M je znázornené na obrázku~\ref{fig:input_comparison_final_m}. Z grafu je zrejmé, že varianty \texttt{header\_only} a \texttt{subject\_only} dosahujú výrazne nižšie hodnoty macro F1, čo naznačuje, že tieto časti emailu samy osebe neposkytujú dostatočne robustný signál pre klasifikáciu.
+
+Reprezentácia \texttt{body\_only} prináša výrazné zlepšenie, čím sa potvrdzuje, že rozhodujúca informácia je obsiahnutá najmä v texte správy. Napriek tomu však najlepšie výsledky dosahuje kombinovaný prístup \texttt{text\_plus\_features}, ktorý konzistentne prekonáva všetky ostatné varianty naprieč evaluačnými splitmi vrátane náročných scenárov \texttt{test\_hard\_source}, \texttt{test\_hard\_cluster} a \texttt{test\_deployment}.
+
+Tento výsledok potvrdzuje, že vhodne navrhnuté heuristické príznaky dokážu efektívne doplniť textový model bez toho, aby dominovali jeho rozhodovaniu. Kombinácia obsahových a štrukturálnych signálov tak predstavuje najrobustnejší základ pre klasifikáciu emailov v podmienkach blízkych reálnemu nasadeniu.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=1\linewidth]{final_model_m_input_representation.pdf}
+    \caption{Porovnanie vstupných reprezentácií pre tuned single-stage model scenára M (hybrid\_logreg).}
+    \label{fig:input_comparison_final_m}
+\end{figure}
+
+\textbf{Single-stage, OVR subclass head a two-stage prístup} 
+
+V experimentálnej časti boli porovnané tri základné prístupy ku klasifikácii. Prvým bol single-stage model, ktorý priamo priraďuje email do jednej z cieľových tried. Druhým bol OVR subclass head, pri ktorom sa po oddelení legitímnych správ samostatne odhadujú skóre pre jednotlivé podozrivé triedy. Tretím bol two-stage prístup, pri ktorom prvá fáza rozhoduje medzi benign a suspicious správami a druhá fáza následne rozlišuje konkrétnu kategóriu medzi podozrivými správami.
+
+Plný two-stage prístup je intuitívne atraktívny, pretože kopíruje viacúrovňové rozhodovanie známe z bezpečnostných systémov. V našich experimentoch však nepriniesol konzistentné zlepšenie oproti single-stage klasifikácii. Naopak, vo viacerých benchmarkoch boli single-stage modely stabilnejšie a jednoduchšie interpretovateľné. OVR subclass hlava sa ukázala ako zaujímavý kompromis: na všeobecných offline splitoch neprekonala tuned single-stage model, ale na špecializovaných header/auth a URL campaign benchmarkoch priniesla výrazné zlepšenie multiclass diskriminácie.
+
+Z týchto dôvodov bol single-stage prístup zvolený ako hlavný general/offline smer a two-stage bol ponechaný ako porovnávacia vetva vhodná do experimentálnej a diskusnej časti práce. OVR subclass hlava bola nakoniec zaradená ako špecializovaný campaign-oriented variant nad rovnakým scenárom M.
+
+\textbf{Evaluačný protokol a výber metrík}
+
+Evaluačný protokol bol navrhnutý tak, aby striktne oddeľoval fázu výberu modelu od finálneho hodnotenia a zároveň umožňoval systematické testovanie robustnosti pri distribučných posunoch. Výber modelu (model selection) prebiehal výhradne na validačnom splite \textit{val\_iid}. Hlavný benchmark bol následne reportovaný na \textit{test\_iid} a finálne modely boli ďalej hodnotené na robustnostných splitoch \textit{test\_hard\_source}, \textit{test\_hard\_cluster} a \textit{test\_deployment}.
+
+Ako hlavná metrika bola zvolená \textbf{macro F1}, ktorá v multiclass nastavení poskytuje vyvážené hodnotenie naprieč všetkými triedami, vrátane minoritných kategórií. Okrem nej boli sledované aj doplnkové metriky:
+
+\begin{itemize}
+    \item balanced\_accuracy,
+    \item accuracy,
+    \item per-class precision, recall a F1,
+    \item confusion matrix.
+\end{itemize}
+
+V počiatočnej binárnej fáze bola hlavná pozornosť venovaná metrikám \textbf{precision}, \textbf{recall} a \textbf{F1} pre pozitívnu triedu (phishing). Metrika accuracy bola interpretovaná len ako doplnková, keďže pri nevyvážených dátach môže viesť k skreslenému hodnoteniu výkonu modelu. Tento prístup umožnil lepšie zachytiť schopnosť modelu detegovať phishingové správy pri zachovaní kontroly nad počtom falošných pozitívnych a negatívnych predikcií.
+
+\subsubsection{Výber finálnych scenárov a modelov}
+
+Na základe realizovaných experimentov sa ako najrelevantnejší ukázal scenár M a jeho ďalšie odvodené varianty. Pôvodný scenár M poskytol metodicky čistý anti-template základ, ku ktorému boli neskôr pridané dve rôzne optimalizačné vetvy.
+
+Prvou vetvou bol SHAP-guided tuned single-stage model, ktorý zachováva metodickú čistotu scenára M, ale redukuje feature priestor na najstabilnejší subset a upravuje tréningové váhy. Tento variant sa ukázal ako najsilnejší z pohľadu všeobecnej robustnosti na shared offline splitoch a preto bol zvolený ako primárny general/offline model:
+\begin{itemize}
+    \item \textbf{Primárny general/offline model:} \\
+    \textit{scenario\_m\_anti\_template\_feature\_regularized + hybrid\_logreg + text\_plus\_features + SHAP-guided feature subset}
+\end{itemize}
+
+Druhou vetvou bol campaign-specialized variant, ktorý kombinuje ne-leaky campaign-style adaptačný tréning, zúženie spam triedy a OVR subclass hlavu. Tento variant sa ukázal ako najsilnejší na špecializovaných kampaniach z Experimentov 2 a 3:
+\begin{itemize}
+    \item \textbf{Špecializovaný campaign model:} \\
+    \textit{scenario\_m\_anti\_template\_feature\_regularized + hybrid\_logreg + text\_plus\_features + adaptation + spam narrowing + OVR}
+\end{itemize}
+
+Pre referenčné porovnanie ostal zachovaný aj silný anti-source baseline zo scenára L:
+\begin{itemize}
+    \item \textbf{Referenčný baseline:} \\
+    \textit{scenario\_l\_combined\_anti\_source + hybrid\_sgd\_log + text\_plus\_features}
+\end{itemize}
+
+Takto definovaný výber lepšie odráža reálny tréningový vývoj než pôvodné porovnanie L verzus M v izolovanej podobe a zároveň vysvetľuje, prečo sa v neskorších kapitolách objavujú dva rôzne „finálne“ modely podľa typu evaluácie.
+
+\subsubsection{Porovnanie finálnych kandidátov na robustnostných splitoch}
+
+Táto časť vychádza výhradne z hodnotenia na spoločných validačných a testovacích splitoch datasetu
+(\textit{val\_iid}, \textit{test\_iid}, \textit{test\_hard\_source}, \textit{test\_hard\_cluster}, \textit{test\_deployment}).
+
+
+Na náročných splitoch boli dosiahnuté tieto hodnoty \texttt{f1\_macro}:
+
+\begin{table}[H]
+\centering
+\caption{Porovnanie výsledkov modelov na rôznych testovacích scenároch}
+\label{tab:model_results}
+\footnotesize
+\setlength{\tabcolsep}{5pt}
+\renewcommand{\arraystretch}{1.1}
+\begin{tabular}{lccc}
+\toprule
+\textbf{Dataset} & \textbf{L+SGD} & \textbf{M baseline} & \textbf{Tuned single-stage} \\
+\midrule
+test\_hard\_source   & 0.694 & 0.802 & 0.874 \\
+test\_hard\_cluster  & 0.820 & 0.848 & 0.864 \\
+test\_deployment     & 0.876 & 0.896 & 0.908 \\
+\bottomrule
+\end{tabular}
+
+\end{table}
+
+Výsledky potvrdzujú, že scenár M je robustnejší na source-shift splite
+a SHAP-guided tuned single-stage konfigurácia \textit{M + hybrid\_logreg}
+dosahuje najlepší celkový kompromis na náročných testoch.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=1\linewidth]{lm_hard_grouped_models.pdf}
+    \caption{Porovnanie finálnych kandidátov na hard a deployment splitoch (macro F1)}
+    \label{fig:lm_hard_grouped}
+\end{figure}
+
+
+\textbf{Analýza finálneho modelu}
+
+Ako finálny general/offline model bol zvolený variant:
+\texttt{scenario\_m\_anti\_template\_feature\_regularized + hybrid\_logreg + text\_plus\_features}
+so SHAP-guided feature subsetom a tuned class scalingom.
+
+Pre objektívne zhodnotenie bol model analyzovaný na nezávislom testovacom splite \texttt{test\_deployment}, ktorý lepšie reprezentuje podmienky reálneho nasadenia než experimentálne dáta z kampane.
+
+Konfúzna matica finálneho modelu je znázornená na obrázku~\ref{fig:confusion_matrix}. Z výsledkov je možné pozorovať niekoľko kľúčových charakteristík.
+
+Trieda \texttt{legit} je klasifikovaná veľmi spoľahlivo, čo dokumentuje vysoký počet správne klasifikovaných vzoriek (14916) a relatívne nízky počet chýb smerom k ostatným triedam (najmä 141 do \texttt{phishing} a 187 do \texttt{spam}). To naznačuje, že model dokáže robustne odlišovať bežnú komunikáciu od škodlivého obsahu.
+
+Trieda \texttt{phishing} dosahuje taktiež veľmi dobré výsledky (2616 správne klasifikovaných vzoriek), pričom chyby sú rozdelené medzi \texttt{spam} (46 prípadov) a \texttt{legit} (64 prípadov). Tento vzor chýb odráža prirodzené prekrytie medzi manipulatívnym marketingovým obsahom a phishingovými technikami.
+
+Trieda \texttt{financial\_fraud} je klasifikovaná stabilne (332 správnych klasifikácií), pričom väčšina chýb smeruje do triedy \texttt{spam} (20 prípadov). Tento jav je očakávaný, keďže finančné podvody často využívajú podobné jazykové vzory ako agresívny marketing alebo spam.
+
+Najproblematickejšou triedou ostáva \texttt{spam}. Aj keď model správne klasifikoval 799 vzoriek, dochádza k zámene s \texttt{legit} (21 prípadov) a \texttt{phishing} (9 prípadov). To naznačuje, že hranica medzi spamom a ostatnými kategóriami je v reálnych dátach menej jednoznačná a výrazne závisí od kontextu správy.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=1\linewidth]{final_model_confusion_matrix_test_deployment.pdf}
+    \caption{Konfúzna matica finálneho modelu na splite test\_deployment}
+    \label{fig:confusion_matrix}
+\end{figure}
+
+Z pohľadu praktického nasadenia model vykazuje veľmi dobrú schopnosť rozlišovať medzi legitímnou a škodlivou komunikáciou. Najväčšie chyby vznikajú pri jemnej diferenciácii medzi jednotlivými typmi škodlivých správ (spam vs. phishing vs. financial fraud), čo je typické aj pre reálne bezpečnostné systémy.
+
+Dôležitým pozorovaním je rozdiel medzi experimentálnymi dátami (Experiment 1) a testovacím splitom. Kým v Experiment 1 modely dosahovali takmer nulový počet false positive prípadov, na \texttt{test\_deployment} sa objavuje realistickejší trade-off medzi precision a recall. Tento rozdiel potvrdzuje, že model nie je preučený na syntetické alebo kampanové dáta, ale zachováva schopnosť generalizácie na širšiu distribúciu emailov.
+
+Z pohľadu metodickej čistoty aj praktického použitia sa tento variant javí ako najvhodnejší finálny general/offline model. Campaign-specialized adapted+OVR ostáva dôležitým doplnkovým variantom pre špecializované benchmarky, no baseline zo scenára L naďalej slúži ako porovnávacia anti-source konfigurácia.
+
+\subsubsection{Zhrnutie navrhnutého riešenia}
+
+Navrhnuté riešenie prešlo vývojom od pôvodnej jednoduchej pipeline založenej na zlúčení a náhodnom rozdelení verejných datasetov až po robustný, reprodukovateľný a metodicky kontrolovaný experimentálny rámec. Bolo vytvorené lokálne laboratórne prostredie s nástrojmi GoPhish a MailHog, pripravený automatizovaný pipeline pre sťahovanie, čistenie a unifikáciu datasetov, implementované mechanizmy proti source a template leakage a navrhnutý viacúrovňový evaluačný protokol.
+
+Hlavným prínosom navrhnutého riešenia nie je len samotná klasifikácia emailov, ale predovšetkým dôraz na to, aby sa model učil robustné a všeobecne prenositeľné signály. Z tohto dôvodu bola značná pozornosť venovaná split stratégii, anti-leak scenárom, auditovateľnosti dátovej prípravy a porovnaniu viacerých alternatívnych tréningových konfigurácií.
+
+Takto pripravený rámec vytvára pevný základ pre nasledujúcu experimentálnu časť práce, v ktorej budú systematicky porovnané heuristické, modelové a hybridné prístupy na klasifikáciu emailových správ.
+
+
+\subsection{Heuristický analyzátor}
+\begin{table*}[!t]
+\label{tab:heuristic_scoring_rules}
+\centering
+\caption{Pravidlá heuristického skórovania analyzátora}
+\footnotesize
+\renewcommand{\arraystretch}{1.15}
+
+\begin{tabular}{p{4.5cm} p{2.8cm} p{9cm}}
+\toprule
+\textbf{Indikátor} & \textbf{Príspevok do skóre} & \textbf{Význam} \\
+\midrule
+SPF fail & +20 & Silný technický signál zlyhania autentifikácie odosielateľa \\
+DKIM fail & +15 & Indikuje problém s integritou alebo podpisom správy \\
+DMARC fail & +20 & Potvrdzuje nesúlad domény a autentifikačných mechanizmov \\
+Nesúlad From a Reply-To & +15 & Častý znak spoofingu alebo presmerovania odpovede \\
+Nesúlad From a Return-Path & +15 & Indikuje rozdiel medzi deklarovaným a technickým odosielateľom \\
+IP adresa v URL & +10 za URL, max. +20 & URL smerujúca priamo na IP býva častá pri phishingu \\
+Skracovač URL & +5 za URL, max. +10 & Skrýva cieľovú doménu a znižuje transparentnosť odkazu \\
+Obfuskovaná URL & +3 za URL, max. +10 & URL s @, percent-encodingom alebo dlhým query reťazcom môže skrývať skutočný cieľ \\
+Anchor mismatch & +5 za výskyt, max. +10 & Rozdiel medzi zobrazeným odkazom a skutočným cieľom \\
+Podozrivá TLD & +5 za doménu, max. +10 & Výskyt TLD častejšie spájaných s phishingom alebo spamom \\
+Externé URL domény & +3 za doménu, max. +12 & Odkazy vedúce mimo domény odosielateľa \\
+Vysoký nesúlad odosielateľ / URL domény & +5 až +10 & Silný indikátor, že obsah nesedí s identitou odosielateľa \\
+Brand typosquatting & +15 & Doména napodobňuje známu značku s malou zmenou názvu \\
+Credential keywords & +3 za výskyt, max. +15 & Výrazy ako login, password, account, confirm \\
+Urgent keywords & +2 za výskyt, max. +10 & Výrazy vytvárajúce tlak a naliehavosť \\
+Vysoká hustota credential / urgent výrazov & +4 až +5 & Koncentrovaný výskyt manipulatívnych výrazov v texte \\
+Riziková príloha & +10 & Príloha s potenciálne nebezpečnou príponou \\
+Display-name spoofing & +10 & Zobrazené meno dôveryhodnej značky pri cudzej doméne \\
+Unicode mixed script & +10 & Kombinácia skriptov v doméne môže indikovať homografický útok \\
+Received anomália & +5 & Neštandardný transportný reťazec správy \\
+Vysoký pomer veľkých písmen & +5 & Agresívny alebo manipulatívny štýl komunikácie \\
+Veľa výkričníkov & +5 & Typický znak nátlakového alebo spamového štýlu \\
+Trusted domain guardrail & $-20$ & Zníženie skóre pri dôveryhodnej komunikácii bez silných rizikových signálov \\
+\bottomrule
+\end{tabular}
+\end{table*}
+\textbf{Architektúra a motivácia}
+
+Heuristický analyzátor bol navrhnutý ako transparentná a auditovateľná vrstva spracovania e-mailových správ, ktorej úlohou je extrahovať technické aj obsahové príznaky zo správ vo formáte \texttt{.eml}, kvantifikovať ich pomocou explicitne definovaného skórovacieho mechanizmu a pripraviť ich ako vstup pre ďalšie modelové spracovanie. Motiváciou pre jeho návrh bolo, že samotný text správy neposkytuje dostatočné informácie na spoľahlivú detekciu útokov, keďže významná časť indikátorov je obsiahnutá v hlavičkách, URL adresách a štruktúre správy. Zároveň bolo cieľom zachovať vysokú mieru interpretovateľnosti, aby bolo možné spätne vysvetliť rozhodnutia systému.
+
+\textbf{Parsovanie a reprezentácia správy}
+
+Spracovanie začína parsovaním \texttt{.eml} súboru pomocou triedy \texttt{BytesParser} z modulu \texttt{email}, čím sa zachováva plná MIME štruktúra správy. Analyzátor extrahuje hlavičky, textové časti, HTML časti a prílohy, pričom každá kategória je spracovaná samostatne. V prípade multipart správ sa prechádza celý MIME strom a jednotlivé časti sa klasifikujú podľa typu obsahu a atribútov. Výsledkom je jednotná reprezentácia obsahujúca textové segmenty, HTML obsah, prílohy a zoznam URL adries, ktorá slúži ako základ pre ďalšiu extrakciu príznakov.
+
+\textbf{Extrakcia URL a doménových príznakov}
+
+URL adresy sú detegované kombináciou základného regulárneho výrazu a pokročilého vzoru podporujúceho Unicode a IDN domény. Každá URL je normalizovaná, aby sa odstránili redundancie a zabezpečila konzistentná reprezentácia. Následne sa analyzuje hostiteľ URL, pričom sa sleduje výskyt IP adries, skracovačov URL, podozrivých TLD domén, punycode zápisu a zmiešaných Unicode skriptov. Dôležitým príznakom je aj pomer URL domén, ktoré sa nezhodujú s doménou odosielateľa, čo indikuje potenciálne presmerovanie na nedôveryhodné zdroje. Samostatne sa deteguje aj typosquatting značiek pomocou Levenshteinovej vzdialenosti voči známym doménam.
+
+\textbf{Hlavičkové a autentifikačné indikátory}
+
+Analyzátor extrahuje kľúčové hlavičky ako \texttt{From}, \texttt{Reply-To}, \texttt{Return-Path} a \texttt{Message-ID} a porovnáva ich domény s cieľom identifikovať nesúlady. Tieto nesúlady predstavujú častý znak spoofingu. Okrem toho sa spracúva hlavička \texttt{Authentication-Results}, z ktorej sa extrahujú výsledky SPF, DKIM a DMARC. Zlyhania týchto mechanizmov sú považované za silné technické indikátory podozrivej správy, keďže signalizujú problém s autenticitou odosielateľa.
+
+\textbf{Obsahové a štylistické príznaky}
+
+Text správy je analyzovaný z hľadiska štylistických znakov a výskytu kľúčových slov. Sleduje sa počet urgentných, credential, threat a finančných výrazov, ako aj ich hustota v texte. Tieto príznaky reflektujú typické stratégie sociálneho inžinierstva, ktoré využívajú tlak, naliehavosť alebo manipuláciu používateľa. Okrem toho sa počíta pomer veľkých písmen, počet výkričníkov a pomer číslic, ktoré môžu indikovať agresívny alebo manipulatívny štýl komunikácie.
+
+\textbf{HTML a štrukturálne anomálie}
+
+V HTML častiach sa detegujú nesúlady medzi zobrazeným textom odkazu a jeho skutočným cieľom, čo predstavuje typickú phishingovú techniku. Analyzátor tiež identifikuje obfuskované URL adresy, ktoré obsahujú netypické znaky alebo nadmernú komplexitu. Sleduje sa aj prítomnosť HTML-only správ a anomálie v počte \texttt{Received} hlavičiek, ktoré môžu indikovať neštandardný transport správy.
+
+\textbf{Heuristické skórovanie}
+
+Na základe extrahovaných príznakov analyzátor vypočíta heuristické skóre v rozsahu 0 až 100. Každý indikátor prispieva k skóre definovaným počtom bodov, pričom silné technické signály ako zlyhanie SPF, DKIM alebo DMARC majú vyššiu váhu než slabšie obsahové indikátory. Skóre je následne mapované na tri úrovne rizika: nízke, stredné a vysoké. Súčasťou výstupu je aj zoznam dôvodov (\texttt{heuristic\_reasons}), ktorý zaznamenáva, ktoré indikátory prispeli k výslednému skóre, čím sa zabezpečuje vysvetliteľnosť systému.
+
+\textbf{Ochrana proti falošným poplachom}
+
+Analyzátor obsahuje aj mechanizmus na zníženie počtu false positive prípadov. Ak správa pochádza z dôveryhodnej domény, autentifikačné mechanizmy neindikujú problém a neobsahuje silné rizikové znaky, výsledné skóre je redukované. Tento prístup reflektuje potrebu praktickej použiteľnosti systému, kde je dôležité minimalizovať zbytočné upozornenia pri legitímnej komunikácii.
+
+
+\textbf{Integrácia do pipeline}
+
+Výstup analyzátora má dvojitú úlohu. Na jednej strane poskytuje samostatné heuristické hodnotenie s vysvetlením, ktoré môže byť využité priamo používateľom. Na druhej strane generuje štruktúrovaný dataset obsahujúci numerické a kategóriálne príznaky, ktorý slúži ako vstup pre modely strojového učenia. Tento dizajn umožňuje kombinovať výhody heuristického prístupu (interpretovateľnosť) s výhodami ML prístupov (vyššia presnosť a generalizácia).
+
+\subsection{Ukážka výstupu analyzátora}
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.8\columnwidth]{analyzer_output.png}
+\caption{Príklad výstupu analyzátora e-mailov}
+\label{fig:analyzer_output}
+\end{figure}
+
+
+Na obr.~\ref{fig:analyzer_output} je zobrazený príklad výstupu analyzátora. Výstup je štruktúrovaný do viacerých blokov, ktoré kombinujú heuristickú analýzu a model strojového učenia. Vidíme základné metadáta e-mailu (odosielateľ, príjemca, predmet, počet URL), heuristické skóre spolu s vysvetlením (napr. prítomnosť \texttt{credential\_keywords}), zoznam detegovaných príznakov (v tomto prípade žiadne) a výstup ML modelu vrátane pravdepodobností tried.
+
+Heuristická aj ML vrstva v danom príklade klasifikujú správu ako legitímnu, pričom ML model poskytuje detailnejší pohľad cez distribúciu pravdepodobností. Tento kombinovaný výstup umožňuje lepšiu interpretáciu rozhodnutí a identifikáciu potenciálnych rizík.
+
+\subsection{Experimenty}
+
+\subsubsection{Experiment 1 – Simulácia kampane a klasifikácia doručených e-mailov}\label{epx1}
+
+Cieľom Experimentu 1 bolo overiť funkčnosť navrhnutého end-to-end postupu v kontrolovanom prostredí, teda od generovania e-mailových správ, cez ich distribúciu v simulovanej kampani, až po ich zber, analýzu a klasifikáciu. Experiment zároveň slúžil na prvé overenie správania heuristického analyzátora aj modelových klasifikátorov na správach doručených v prostredí GoPhish + MailHog.
+
+\paragraph{Generovanie dát}
+
+Vstupné správy boli zostavené kombináciou viacerých prístupov s cieľom dosiahnuť obsahovú aj štylistickú variabilitu. Použité boli štyri hlavné vetvy:
+
+\begin{itemize}
+    \item \textbf{manuálne vytvorené správy} – menší počet kontrolovaných emailov pripravených autorom, reprezentujúcich základné legitímne aj škodlivé scenáre,
+    \item \textbf{LLM drafty} (\texttt{exp1\_llm\_draft}) – návrhy správ generované jazykovým modelom,
+    \item \textbf{mutované správy} (\texttt{exp1\_mutated}) – automaticky upravené existujúce správy so zmenami v texte, URL a hlavičkách,
+    \item \textbf{realistické úpravy z viacerých zdrojov} (\texttt{exp1\_multi\_real\_edit}) – manuálne alebo poloautomaticky upravené správy inšpirované reálnymi vzormi.
+\end{itemize}
+\paragraph{Simulácia kampane a zber dát}
+
+Správy boli následne seedované do nástroja GoPhish a doručované cez MailHog. Na rozdiel od jednoduchého jednopríjemcového testovania boli použité \textbf{unikátne recipient identity} vo formáte \texttt{user\{id\}@local.lab}, čím sa dosiahol realistickejší zber a lepšia identifikácia jednotlivých správ v kampani. Po seedingu boli doručené správy zozbierané vo formáte \texttt{.eml} a následne analyzované skriptom \texttt{analyze\_campaign.py}, ktorý zabezpečil parsovanie správ, extrakciu feature-ov a prípravu vstupov pre klasifikáciu.
+
+\subsubsection*{Zloženie dát}
+
+\begin{table}[http]
+\centering
+\caption{Zloženie dát a rozsah spracovania v experimente~1}
+\label{tab:exp1_dataset}
+\footnotesize
+\setlength{\tabcolsep}{5pt}
+\renewcommand{\arraystretch}{1.1}
+\begin{tabular}{lc}
+\toprule
+\textbf{Metrika} & \textbf{Hodnota} \\
+\midrule
+Počet seedovaných správ celkom & 250 \\
+\quad vytvorené manuálne & 25 \\
+\quad \texttt{exp1\_llm\_draft} & 25 \\
+\quad \texttt{exp1\_mutated} & 200 \\
+\quad \texttt{exp1\_multi\_real\_edit} & 25 \\
+\addlinespace
+Počet zozbieraných správ (aktuálny run) & 250 \\
+Distribúcia binárnych labelov (0/1) & 50 / 200 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Kategórie a mapovanie tried}
+
+V experimente boli použité štyri cieľové kategórie:
+\texttt{legit}, \texttt{phishing}, \texttt{spam} a \texttt{financial\_fraud}.  
+V prípadoch, kde sa v návrhu správ objavoval scenár \texttt{spoofing}, bol na účely jednotného evaluačného prostredia mapovaný do triedy \texttt{phishing}, keďže z pohľadu klasifikačného cieľa išlo o formu podvodnej sociálnej manipulácie.
+
+\paragraph{Heuristický analyzátor}
+
+Heuristický analyzátor bol pôvodne nastavený s prahovou hodnotou 40. Pri tomto nastavení však vykazoval nízky recall, teda nedokázal zachytiť dostatočný počet škodlivých správ. Z tohto dôvodu bol vykonaný sweep prahových hodnôt a ako najvhodnejší kompromis pre Experiment 1 bol zvolený prah 20.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\linewidth]{exp1_heuristic_threshold_sweep.pdf}
+    \caption{Závislosť metrík heuristického analyzátora od prahovej hodnoty.}
+    \label{fig:exp1_threshold_sweep}
+\end{figure}
+
+Z grafu (Obr.~\ref{fig:exp1_threshold_sweep}) je možné pozorovať typický trade-off medzi precision a recall. So znižovaním prahu dochádza k výraznému nárastu recall, avšak zároveň k poklesu precision. Zvolený prah 20 predstavuje vyvážený kompromis, ktorý umožňuje zachytiť väčšinu škodlivých správ pri stále akceptovateľnej miere falošne pozitívnych detekcií.
+
+\paragraph{Porovnanie heuristiky a modelov}
+
+Na rovnakých dátach bol vykonaný aj priamy porovnávací experiment medzi heuristickým analyzátorom a modelovými prístupmi. Výsledky sú znázornené na obrázku~\ref{fig:exp1_model_comparison}.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\linewidth]{exp1_model_comparison.pdf}
+    \caption{Porovnanie heuristického prístupu, tuned single-stage modelu a campaign-specialized variantu adapted+OVR na kampani z Experimentu 1.}
+    \label{fig:exp1_model_comparison}
+\end{figure}
+
+Z grafu je zrejmé, že heuristický analyzátor dosahuje vysoký recall, avšak výrazne zaostáva v metrikách balanced accuracy a MCC. Tuned single-stage model a variant adapted+OVR obe poskytujú stabilnejšiu separáciu tried a lepší kompromis medzi precision a recall. Variant adapted+OVR dosahuje na zmiešanej kampani mierne vyššie binárne F1, no jeho zisk sa nepretavuje do lepšieho multiclass výkonu.
+
+\paragraph{Multiclass modelové výsledky scenárov L a M}
+
+Na dátach z aktuálneho sender-clean runu boli následne vyhodnotené scenáre L a M. Vývoj multiclass výkonu je znázornený grafom na obrázku~\ref{fig:exp1_multiclass_comparison}.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\linewidth]{exp1_multiclass_method_comparison.pdf}
+    \caption{Porovnanie multiclass metrík heuristiky, tuned single-stage modelu a variantu adapted+OVR na dátach Experimentu 1.}
+    \label{fig:exp1_multiclass_comparison}
+\end{figure}
+
+Výsledky ukazujú, že samotná heuristika dosahuje výrazne nižší multiclass výkon než modelové prístupy. Na zmiešanom sender-clean benchmarku ostáva najsilnejším multiclass variantom tuned single-stage model zo scenára M (\texttt{mc\_f1\_macro = 0.6213}), zatiaľ čo adapted+OVR dosahuje porovnateľné, ale mierne nižšie skóre (\texttt{0.6198}). To naznačuje, že campaign-style adaptácia pomáha najmä na úzko špecializovaných benchmarkoch, nie na obsahovo zmiešanej kampani Experimentu 1.
+
+\paragraph{Analýza finálneho modelu na dátach experimentu}
+
+Detailnejší pohľad na správanie finálneho modelu poskytuje konfúzna matica na obrázku~\ref{fig:exp1_confusion_matrix}.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\linewidth]{exp1_m_confusion_best_final.pdf}
+    \caption{Konfúzna matica tuned single-stage modelu na dátach Experimentu 1.}
+    \label{fig:exp1_confusion_matrix}
+\end{figure}
+
+Z konfúznej matice je možné pozorovať, že tuned single-stage model veľmi spoľahlivo klasifikuje triedy \texttt{legit}, \texttt{phishing} a \texttt{financial\_fraud}, pričom najväčšie problémy vznikajú pri triede \texttt{spam}. Tá zostáva najčastejšie zamieňaná s \texttt{phishing}, čo je konzistentné aj s ostatnými experimentmi.
+
+\paragraph{Interpretácia výsledkov}
+
+Experiment potvrdil niekoľko kľúčových zistení:
+
+\begin{itemize}
+    \item kvalita seed vstupu (najmä konzistencia subject/body a profil odosielateľa) má zásadný vplyv na výsledky,
+    \item heuristický prístup je vhodný ako citlivý screening (vyšší recall),
+    \item modelové prístupy poskytujú lepšiu separáciu tried a stabilnejšie metriky,
+    \item kombinácia \texttt{text\_plus\_features} je výrazne silnejšia než samotný text,
+    \item rebalancing tried v scenári M výrazne pomáha minoritným kategóriám.
+\end{itemize}
+
+\paragraph{Záver experimentu}
+
+Experiment 1 potvrdil funkčnosť celej pipeline:
+\[
+\text{generovanie} \rightarrow \text{seeding} \rightarrow \text{zber} \rightarrow \text{analýza} \rightarrow \text{klasifikácia}.
+\]
+
+Z pohľadu výsledkov sa ako najsilnejší \textbf{generalistický} variant pre Experiment 1 ukázal retunovaný model \texttt{hybrid\_logreg} so vstupom \texttt{text\_plus\_features}. Pri finálnom kampanovom vyhodnotení s neutrálnymi class scales dosiahol na 250 doručených správach \texttt{bin\_f1 = 0.9727} a \texttt{mc\_f1\_macro = 0.6213}. Oproti staršiemu runu to predstavuje zlepšenie o \texttt{+0.0818} v binárnom F1 a o \texttt{+0.5027} v multiclass macro F1.
+
+Dodatočne bol testovaný aj campaign-specialized variant s campaign-style adaptačným tréningom, zúženou spam triedou a \textit{one-vs-rest} subclass hlavou. Tento variant zvýšil binárne F1 na \texttt{0.9778}, ale multiclass macro F1 mierne kleslo na \texttt{0.6198}. Na zmiešanom benchmarku Experimentu 1 sa preto ako vhodnejšia voľba ukázal tuned single-stage model, zatiaľ čo adapted+OVR je výhodnejší najmä pre špecializované kampane z Experimentov 2 a 3.
+
+Heuristický analyzátor ostáva vhodným doplnkom pre prvotný screening, avšak pre finálnu klasifikáciu a rozhodovanie je model založený na scenári M jednoznačne vhodnejšou voľbou.
+
+\subsubsection{Experiment 2 – Analýza hlavičiek a autentifikačných indikátorov}\label{epx2}
+
+Cieľom Experimentu 2 bolo overiť dve komplementárne vlastnosti navrhnutého riešenia. 
+Prvou bolo zistiť, či heuristický analyzátor spoľahlivo deteguje vybrané hlavičkové a autentifikačné indikátory v kontrolovaných podmienkach. Druhou bolo overiť, ako sa tieto indikátory, samostatne aj v kombinácii s modelom strojového učenia, správajú na realistickejších kampanových dátach generovaných v prostredí GoPhish a MailHog.
+
+Dôležitým aspektom tohto experimentu je, že \textbf{heuristický analyzátor je navrhnutý ako binárny detektor}, ktorý rozhoduje medzi triedami \texttt{legit} a \texttt{suspicious}. Rovnaký princíp bol použitý aj pri hodnotení modelu strojového učenia, kde multiclass výstup bol interpretovaný aj v binárnom pohľade (legit vs. akýkoľvek typ škodlivej správy). Multiclass metriky preto slúžia skôr ako doplnkové hodnotenie správania modelu.
+
+\paragraph{Analyzované heuristické indikátory}
+
+V rámci Experimentu 2 boli definované a testované konkrétne heuristické indikátory zamerané na analýzu e-mailových hlavičiek a autentifikačných mechanizmov. Tieto indikátory vychádzajú priamo z cieľov práce, najmä detekcie spoofingu, nesúladu hlavičiek a overovania autentifikačných kontrol.
+
+Medzi sledované indikátory patrili:
+
+\begin{itemize}
+    \item \texttt{from\_reply\_mismatch} – nesúlad medzi adresami \texttt{From} a \texttt{Reply-To},
+    \item \texttt{from\_return\_path\_mismatch} – nesúlad medzi \texttt{From} a \texttt{Return-Path},
+    \item \texttt{display\_name\_spoof\_flag} – podozrivý zobrazovaný názov odosielateľa (napr. imitácia známej služby),
+    \item \texttt{message\_id\_domain\_mismatch} – nesúlad domény v hlavičke \texttt{Message-ID},
+    \item \texttt{received\_anomaly} – neštandardná alebo podozrivá reťaz hlavičiek \texttt{Received},
+    \item \texttt{spf\_fail} – zlyhanie SPF autentifikácie,
+    \item \texttt{dkim\_fail} – zlyhanie DKIM podpisu,
+    \item \texttt{dmarc\_fail} – zlyhanie DMARC politiky,
+    \item \texttt{trusted\_domain\_only} – príznak legitímnej komunikácie pochádzajúcej výlučne z dôveryhodnej domény.
+\end{itemize}
+
+Tieto indikátory boli cielene manipulované v kontrolovanom datasete (Vetva A), pričom pre každý prípad bol definovaný očakávaný výstup.
+
+
+\paragraph{Vetva A – kontrolovaný header/auth dataset}
+
+Prvá vetva bola zameraná na presné overenie detekcie jednotlivých indikátorov. 
+Bol vytvorený kontrolovaný súbor \texttt{.eml} správ, v ktorom boli cielene manipulované vybrané položky hlavičky.
+
+Pre každý prípad bol definovaný očakávaný výstup a následne porovnaný s detekciou analyzátora. Výsledky ukázali, že pre všetky sledované indikátory dosiahol analyzátor perfektné výsledky (accuracy, precision aj recall rovné 1.0).
+
+Tento výsledok potvrdzuje, že heuristický analyzátor spoľahlivo identifikuje explicitne definované hlavičkové a autentifikačné anomálie. V tejto vetve však nejde o klasifikačný problém, ale o validáciu detekčných pravidiel. Z tohoto dôvodu je taká vysoká uspešnosť.
+
+\paragraph{Vetva B – realistická kampaň}
+
+Druhá vetva experimentu bola realizovaná ako simulovaná phishingová kampaň v prostredí GoPhish + MailHog. Dataset obsahoval 100 správ so zmiešaným pôvodom (LLM generované a realisticky upravené správy) a štyrmi triedami: \texttt{legit}, \texttt{phishing}, \texttt{spam} a \texttt{financial\_fraud}.
+
+Na týchto dátach boli porovnané tri prístupy:
+
+\begin{itemize}
+    \item \textbf{heuristic\_only} – binárne rozhodovanie legit vs suspicious,
+    \item \textbf{ml\_only} – multiclass model interpretovaný aj v binárnom režime,
+    \item \textbf{heuristic\_plus\_ml} – kombinovaný prístup.
+\end{itemize}
+
+\paragraph{Porovnanie prístupov}
+
+Pri hodnotení výsledkov je potrebné zdôrazniť, že primárnym cieľom heuristického analyzátora je binárne rozhodovanie medzi triedami \texttt{legit} a \texttt{suspicious}. Z tohto dôvodu sú hlavné metriky reportované v binárnom režime, zatiaľ čo multiclass výsledky slúžia len ako doplnkové hodnotenie správania modelov.
+
+V binárnom hodnotení (legit vs. suspicious) dosiahli jednotlivé prístupy nasledovné výsledky:
+
+\begin{table}[H]
+\centering
+\caption{Porovnanie prístupov v Experimente 2 (Vetva B)}
+\label{tab:exp2_comparison}
+\footnotesize
+\setlength{\tabcolsep}{4pt}
+\renewcommand{\arraystretch}{1.1}
+\begin{tabular}{lccccc}
+\toprule
+\textbf{Prístup} & \textbf{Acc} & \textbf{Bal Acc} & \textbf{Prec} & \textbf{Rec} & \textbf{F1} \\
+\midrule
+\texttt{heuristic\_only}        & 0.80 & 0.50  & 0.80   & 1.00 & 0.8889 \\
+\texttt{ml\_only}               & \textbf{0.97} & \textbf{0.9813} & \textbf{1.0000} & 0.9625 & \textbf{0.9809} \\
+\texttt{heuristic\_plus\_ml}    & 0.92 & 0.8188 & 0.9186 & 0.9875 & 0.9518 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Výsledky potvrdzujú, že heuristický analyzátor je veľmi citlivý na podozrivé správy, čo sa prejavuje maximálnym recall (\texttt{1.00}). Na druhej strane má nižšiu špecificitu, čo vedie k horšej hodnote balanced accuracy (\texttt{0.50}). Inými slovami, heuristika má tendenciu označovať väčší počet správ ako podozrivé, aj keď časť z nich patrí do triedy \texttt{legit}.
+
+Najlepší výkon dosiahol prístup \texttt{ml\_only}, ktorý v tomto experimente používa campaign-style adaptačný tréning, zúženie spam triedy a \textit{one-vs-rest} subclass hlavu. Tento variant poskytuje výrazne lepší kompromis medzi precision a recall a zároveň dosahuje najvyššiu hodnotu F1 skóre (\texttt{0.9809}). Kombinovaný prístup \texttt{heuristic\_plus\_ml} ostáva silný, no už nedosahuje výkon samostatného adaptovaného modelu.
+
+Z doplnkového pohľadu boli analyzované aj multiclass výsledky, ktoré však nie sú primárnym cieľom tohto experimentu. V tomto režime heuristika dosahuje nízke hodnoty (napr. \texttt{mc\_f1\_macro = 0.13}), čo je očakávané, keďže nie je navrhnutá na jemné rozlišovanie medzi triedami \texttt{phishing}, \texttt{spam} a \texttt{financial\_fraud}. Adaptovaný model strojového učenia dosahuje v multiclass nastavení výrazne lepší výsledok než pôvodný tuned single-stage variant (\texttt{mc\_f1\_macro = 0.5865} vs. \texttt{0.3262}). To ukazuje, že pri header/auth kampani bol hlavný problém v nesúlade medzi tréningovou distribúciou a campaign-style vstupmi, nie v samotnej kapacite modelu.
+
+Tieto výsledky ukazujú, že heuristika je vhodná najmä ako detektor podozrivosti (binárna úloha), zatiaľ čo model strojového učenia je nevyhnutný pre presnú multiclass klasifikáciu.
+
+\paragraph{Interpretácia výsledkov}
+
+Výsledky experimentu poukazujú na rozdielnu úlohu jednotlivých prístupov:
+
+\begin{itemize}
+    \item heuristický analyzátor funguje spoľahlivo ako detektor prítomnosti rizikových indikátorov,
+    \item campaign-style adaptačný tréning bez leakage výrazne zlepšuje prenositeľnosť modelu na realistickú hlavičkovú kampaň,
+    \item zúženie spam triedy a \textit{one-vs-rest} subclass hlava znižujú kolaps tried \texttt{phishing} a \texttt{financial\_fraud} do \texttt{spam}.
+\end{itemize}
+
+Z pohľadu návrhu systému sa preto ako vhodné riešenie javí architektúra, v ktorej heuristický analyzátor slúži ako doplnkový alebo signalizačný modul (napr. pre vysvetliteľnosť alebo zvýraznenie rizikových príznakov), zatiaľ čo finálne rozhodovanie o kategórii správy je ponechané na adaptovaný model strojového učenia. V tomto experimente sa ukázalo, že samotná úprava rozhodovacieho headu a zladenie tréningovej distribúcie s campaign-style vstupmi prinášajú väčší efekt než jednoduché pravidlové kombinovanie heuristiky a ML modelu.
+
+\paragraph{Záver experimentu}
+
+Experiment 2 potvrdil, že heuristický analyzátor a model strojového učenia majú v systéme odlišné, ale komplementárne úlohy.
+
+Heuristický analyzátor spoľahlivo deteguje explicitné bezpečnostné indikátory a funguje ako prvá vrstva rozhodovania (legit vs suspicious). Najlepšie výsledky však v Track B dosiahol campaign-specialized model s adaptačným tréningom, zúžením spam triedy a \textit{one-vs-rest} subclass hlavou, ktorý dosiahol \texttt{bin\_f1 = 0.9809} a \texttt{mc\_f1\_macro = 0.5865}.
+
+Z metodického hľadiska sa preto ako najvhodnejší prístup javí využitie heuristiky ako doplnkového a vysvetľujúceho modulu, zatiaľ čo hlavné rozhodovanie o kategórii správy by malo byť ponechané na adaptovaný model strojového učenia.
+
+
+\subsubsection{Experiment 3 – URL indikátory a ich vplyv na detekciu podozrivých správ}\label{epx3}
+
+Cieľom Experimentu 3 bolo overiť správanie URL-orientovaných heuristických indikátorov a zistiť, do akej miery tieto signály prispievajú k rozlišovaniu medzi legitímnymi a podozrivými e-mailami. Experiment bol rozdelený na dve vetvy: kontrolovaný benchmark (Track A) a realistickú URL-heavy kampaň (Track B).
+
+\paragraph{Track A – validácia URL indikátorov}
+
+V kontrolovanom prostredí boli všetky sledované URL indikátory detegované bez chyby (accuracy, precision aj recall rovné 1.0). Tento výsledok potvrdzuje správnosť implementácie detekčných pravidiel a spoľahlivú identifikáciu jednotlivých URL znakov.
+
+Pri binárnom rozhodovaní heuristika dosiahla nižšie hodnoty (accuracy = 0.78), čo ukazuje, že kombinovanie indikátorov do finálneho rozhodnutia je náročnejšie ako samotná detekcia jednotlivých znakov.
+
+Je však potrebné zdôrazniť, že ide o kontrolovaný dataset, a preto tieto výsledky predstavujú validáciu implementácie detekčných pravidiel, nie hodnotenie správania analyzátora v realistickom prostredí.
+
+\paragraph{Track B – realistická URL-heavy kampaň}
+
+Na realistickej kampani boli porovnané tri prístupy: \texttt{heuristic\_only}, \texttt{ml\_only} a \texttt{heuristic\_plus\_ml}.
+
+\begin{table}[h]
+\centering
+\caption{Porovnanie prístupov v binárnom hodnotení (Experiment 3 – Track B)}
+\begin{tabular}{lcccc}
+\hline
+Metóda & Accuracy & Precision & Recall & F1 \\
+\hline
+heuristic\_only & 0.81 & 0.8081 & 1.00 & 0.8939 \\
+ml\_only & 0.94 & 1.0000 & 0.9250 & 0.9610 \\
+heuristic\_plus\_ml & 0.93 & 0.9195 & 1.00 & 0.9581 \\
+\hline
+\end{tabular}
+\end{table}
+
+Heuristický analyzátor dosahuje maximálny recall, čo znamená, že zachytáva všetky podozrivé správy. Na druhej strane však nedokáže efektívne odlišovať legitímne správy, čo sa prejavuje vyšším počtom false positive.
+
+Po zavedení campaign-style adaptačného tréningu, zúženia spam triedy a \textit{one-vs-rest} subclass hlavy dosiahol samotný model strojového učenia na URL-heavy kampani najlepší binárny výkon (\texttt{F1 = 0.9610}). Kombinovaný prístup \texttt{heuristic\_plus\_ml} zostáva veľmi silný (\texttt{0.9581}), ale už neprináša zlepšenie nad adaptovaný ML model.
+
+\paragraph{Analýza URL indikátorov}
+
+V kampani sa jednotlivé URL indikátory vyskytovali rovnomerne (približne 25 výskytov na indikátor), čo zabezpečuje vyvážené testovacie prostredie. Analýza korelácie ukázala, že nie všetky indikátory majú rovnaký vplyv na heuristické skóre.
+
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\linewidth]{exp3_url_indicator_spearman_correlation.pdf}
+    \caption{Spearmanova korelácia medzi prítomnosťou URL indikátorov a heuristickým skóre v Experimente 3 (Track B). Najsilnejší pozitívny vzťah bol pozorovaný pri indikátore \texttt{brand\_typosquat}, zatiaľ čo \texttt{shortener\_url} a \texttt{suspicious\_tld} vykázali slabší až negatívny vzťah. Indikátor \texttt{anchor\_mismatch} sa v tejto vetve experimentu neobjavil.}
+    \label{fig:exp3_url_indicator_correlation}
+\end{figure}
+
+Doplnková analýza korelácie ukázala, že jednotlivé URL indikátory neprispievajú k heuristickému skóre rovnako. Najsilnejší pozitívny vzťah bol pozorovaný pri indikátore \texttt{brand\_typosquat}, zatiaľ čo indikátory \texttt{shortener\_url} a \texttt{suspicious\_tld} vykazovali v tomto datasete slabší, resp. negatívny vzťah ku skóre. Tento výsledok naznačuje, že diskriminačná sila jednotlivých URL príznakov závisí aj od konkrétneho zloženia kampanových dát.
+
+\paragraph{Analýza chýb}
+
+Heuristický analyzátor vykazuje zvýšenú chybovosť najmä pri absencii silných URL indikátorov, pričom má tendenciu označovať správy ako podozrivé aj v prípadoch, keď nie sú prítomné jednoznačné rizikové znaky.
+
+Model strojového učenia po adaptácii vykazuje vyváženejšie správanie a jeho chybovosť už nie je tak silno viazaná na jednoduchý kolaps všetkých podozrivých správ do triedy \texttt{spam}. V multiclass režime dosiahol \texttt{mc\_f1\_macro = 0.6052}, čo predstavuje výrazné zlepšenie oproti predchádzajúcemu tuned single-stage variantu (\texttt{0.3003}).
+
+\paragraph{Zachovanie indikátorov}
+
+Výsledky ukazujú, že URL indikátory zostávajú zachované aj po transporte správ cez experimentálne prostredie (GoPhish + MailHog). To potvrdzuje validitu experimentu a umožňuje spoľahlivé vyhodnotenie správania analyzátora v realistickom scenári.
+
+\paragraph{Záver experimentu}
+
+Experiment 3 potvrdil, že URL indikátory predstavujú významný zdroj informácií pre detekciu podozrivých správ. Heuristický analyzátor je veľmi citlivý na prítomnosť týchto znakov, avšak má tendenciu k vyššiemu počtu false positive.
+
+Experiment 3 ukázal, že URL-heavy benchmark výrazne profituje z priblíženia tréningovej distribúcie ku campaign-style vstupom. Adaptovaný model s OVR subclass hlavou dokázal výrazne zlepšiť nielen binárny výkon, ale aj jemné multiclass rozlíšenie medzi \texttt{phishing}, \texttt{spam} a \texttt{financial\_fraud}. URL heuristiky preto ostávajú cenným doplnkovým signálom, no ich najlepší efekt sa dosiahol až po špecializácii tréningu a rozhodovacieho headu modelu.
+
+Výsledky Experimentu 3 zároveň potvrdzujú, že samotná prítomnosť URL indikátorov nie je postačujúca pre presné rozhodovanie a je potrebné ich kombinovať s komplexnejšími modelmi, ktoré dokážu lepšie zachytiť kontext správy.
+
+\subsubsection{Experiment 4 – Robustnosť modelov voči distribučným zmenám a výber finálneho riešenia}\label{exp4}
+
+Cieľom Experimentu 4 bolo systematicky vyhodnotiť robustnosť navrhnutých modelov
+v rôznych scenároch distribučného posunu a na základe toho identifikovať
+najvhodnejšiu konfiguráciu pre nasadenie v realistickom prostredí.
+Experiment nadväzuje na predchádzajúce experimenty a rozširuje ich o
+komplexné offline hodnotenie na viacerých dátových splitoch (Track A)
+a validáciu na realistických kampaniach (Track B a Track C).
+
+\paragraph{Track A – Offline robustnosť naprieč splitmi}
+
+Modely boli vyhodnocované na piatich typoch splitov:
+\texttt{val\_iid}, \texttt{test\_iid}, \texttt{test\_hard\_source},
+\texttt{test\_hard\_cluster} a \texttt{test\_deployment}.
+IID splity reprezentujú štandardné validačné nastavenie,
+zatiaľ čo hard splity simulujú realistické distribučné posuny.
+
+Výsledky ukazujú, že modely dosahujú stabilne vysoký výkon na IID dátach
+(macro F1 $\approx$ 0.87--0.90), avšak výrazné rozdiely sa objavujú
+na hard splitoch. V scenári L (\texttt{scenario\_l\_combined\_anti\_source})
+dochádza k poklesu výkonu na \texttt{test\_hard\_source}
+(macro F1 $\approx$ 0.69), čo naznačuje obmedzenú schopnosť
+generalizácie na nové zdroje dát.
+
+Naopak scenáre M vykazujú výrazne vyššiu robustnosť. V prípade rebalancovaného scenára
+dosahuje model hodnoty macro F1 približne 0.84 na
+\texttt{test\_hard\_source} a približne 0.90 na
+\texttt{test\_deployment}, čo predstavuje významné zlepšenie
+oproti scenáru L.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\linewidth]{exp4_trackA_deployment_macro_f1.pdf}
+\caption{Porovnanie tuned single-stage a adapted+OVR variantu na hlavných offline splitoch v Experimente 4 (Track A). Graf ukazuje, že adapted+OVR pomáha na špecializovaných campaign benchmarkoch, ale na shared offline splitoch zaostáva za tuned single-stage modelom.}
+\label{fig:exp4_trackA_deployment}
+\end{figure}
+
+Výsledky ukazujú, že tuned single-stage model ostáva na shared offline splitoch jednoznačne silnejší než adapted+OVR. Variant \texttt{scenario\_m\_anti\_template\_feature\_regularized + hybrid\_logreg} dosiahol na \texttt{test\_deployment} \texttt{macro F1 = 0.9076} a súčasne výrazne zlepšil výsledok na \texttt{test\_hard\_source} na \texttt{0.8744}. Dodatočne testovaný campaign-specialized variant adapted+OVR síce výrazne pomohol na Experimentoch 2 a 3, no na offline splitoch klesol na \texttt{0.8488} (\texttt{test\_iid}), \texttt{0.7538} (\texttt{test\_hard\_source}), \texttt{0.7966} (\texttt{test\_hard\_cluster}) a \texttt{0.8374} (\texttt{test\_deployment}).
+
+\paragraph{Vplyv architektúry modelu}
+
+Porovnanie modelov \texttt{hybrid\_logreg} a
+\texttt{hybrid\_sgd\_log} ukazuje, že výkonnosť modelu závisí
+od konkrétneho scenára. V anti-template nastavení dosahuje lepšie
+výsledky logistická regresia, zatiaľ čo v rebalancovanom scenári
+vykazuje lepšiu robustnosť model trénovaný pomocou SGD.
+Tento výsledok naznačuje, že optimalizačný algoritmus interaguje
+s charakterom dát a ovplyvňuje schopnosť modelu generalizovať.
+
+\paragraph{Analýza tried}
+
+Detailná analýza ukazuje, že trieda \texttt{phishing}
+je detegovaná s veľmi vysokým recall naprieč všetkými scenármi,
+čo naznačuje vysokú citlivosť modelu na typické phishingové vzory.
+Naopak trieda \texttt{financial\_fraud} predstavuje najväčšiu výzvu,
+pričom jej recall je v scenári L výrazne nižší, no v scenároch M
+dochádza k jeho výraznému zlepšeniu (až nad 0.9).
+Tento efekt je priamo spojený s rebalancovaním dát.
+
+\paragraph{Track B – Doplnková validácia na realistickej kampani (Experiment 1)}
+
+Ako hlavná realistická validácia modelu bola použitá kampaň
+z Experimentu 1\ref{epx1}, ktorá najlepšie reprezentuje kompletný
+end-to-end tok
+(\textit{generovanie} $\rightarrow$ \textit{seeding} $\rightarrow$ \textit{zber}
+$\rightarrow$ \textit{analýza} $\rightarrow$ \textit{klasifikácia})
+na obsahovo zmiešaných dátach. Na rozdiel od špecializovaných kampaní
+v Experimentoch 2 a 3 nejde o úzko zameraný benchmark na jednu doménu
+príznakov (napr. iba hlavičky alebo iba URL), ale o realistickejší
+vstup pre finálne ML rozhodovanie.
+
+Výsledky z Track B potvrdzujú, že model vybraný na základe
+offline robustnostného hodnotenia si zachováva vysokú kvalitu
+aj v kampanovom prostredí. Na zmiešanej kampani z Experimentu 1
+dosiahol tuned single-stage variant \texttt{bin\_f1 = 0.9727}
+a \texttt{mc\_f1\_macro = 0.6213}. Campaign-specialized adapted+OVR
+variant dosiahol mierne vyššie binárne F1 (\texttt{0.9778}), ale
+multiclass výkon sa nezlepšil (\texttt{0.6198}). Táto časť preto
+slúži ako praktické overenie, že Exp1 ostáva najlepšie reprezentovaný
+generalistickým tuned modelom, zatiaľ čo adapted+OVR je vhodnejší
+pre úzko špecializované kampane.
+
+\paragraph{Track C – Multiclass doplnková analýza na špecializovaných kampaniach (Experimenty 2 a 3)}
+
+Popri hlavnej kampanovej validácii v binárnom režime bol model
+vyhodnotený aj v multiclass nastavení na kampaniach z Experimentu 2
+(header-oriented) a Experimentu 3\ref{epx3} (URL-oriented).
+Multiclass úloha zahŕňa triedy \texttt{legit}, \texttt{phishing},
+\texttt{spam} a \texttt{financial\_fraud} a predstavuje doplnkovú
+analytickú vrstvu, ktorá umožňuje detailnejšie posúdiť schopnosť
+modelu rozlišovať medzi jednotlivými typmi útokov.
+
+Na kampani z Experimentu~2 \ref{epx2} dosiahol campaign-specialized
+variant adapted+OVR hodnoty
+\begin{itemize}
+    \item \texttt{mc\_accuracy = 0.58},
+    \item \texttt{mc\_balanced\_accuracy = 0.6404},
+    \item \texttt{mc\_f1\_macro = 0.5865}.
+\end{itemize}
+
+Na kampani z Experimentu~3 \ref{epx3} dosiahol
+\begin{itemize}
+    \item \texttt{mc\_accuracy = 0.60},
+    \item \texttt{mc\_balanced\_accuracy = 0.6829},
+    \item \texttt{mc\_f1\_macro = 0.6052}.
+\end{itemize}
+
+
+Pre kontext je vhodné uviesť výkon v Experimente~1\ref{epx1},
+kde tuned single-stage model dosiahol \texttt{mc\_f1\_macro = 0.6213}.
+Adapted+OVR variant dosiahol na tej istej kampani \texttt{0.6198},
+čo potvrdzuje, že jeho prínos je viazaný najmä na špecializované
+header/auth a URL benchmarky, nie na obsahovo zmiešaný scenár.
+
+V porovnaní s binárnym hodnotením ostáva multiclass úloha náročnejšia,
+avšak adapted+OVR výrazne znížil pôvodný kolaps tried
+\texttt{phishing} a \texttt{financial\_fraud} do \texttt{spam}.
+Výsledky tak ukazujú, že špecializácia tréningu a rozhodovacieho
+headu môže výrazne zlepšiť subclass diskrimináciu, no za cenu
+horšej všeobecnej offline robustnosti.
+
+Pri interpretácii výsledkov je potrebné zohľadniť, že kampane z
+Experimentov~2\ref{epx2} a~3\ref{epx3} sú zámerne konštruované so zameraním na konkrétne
+typy príznakov (hlavičkové resp. URL indikátory). Nejde teda o
+plnohodnotný všeobecný benchmark, ale o doplnkové testovanie
+robustnosti modelu voči špecifickým distribučným posunom a typom útokov.
+
+\paragraph{Výber finálneho modelu}
+
+Na základe kombinácie výsledkov zo všetkých splitov a kampaní sa ukázalo,
+že neexistuje jeden univerzálne najsilnejší variant pre všetky typy dát.
+Ako \textbf{finálny general/offline model} bol preto zvolený retunovaný
+variant \texttt{scenario\_m\_anti\_template\_feature\_regularized}
+s modelom \texttt{hybrid\_logreg}. V SHAP-guided nastavení dosiahol
+\texttt{f1\_macro = 0.9105} na \texttt{test\_iid},
+\texttt{0.8744} na \texttt{test\_hard\_source},
+\texttt{0.8638} na \texttt{test\_hard\_cluster} a
+\texttt{0.9076} na \texttt{test\_deployment}.
+
+Ako \textbf{finálny campaign-specialized variant} pre špecializované
+header/auth a URL kampane bol zvolený model s campaign-style adaptačným
+tréningom bez leakage, zúženou spam triedou a \textit{one-vs-rest}
+subclass hlavou (adapted+OVR). Tento variant dosiahol na Exp2
+\texttt{bin\_f1 = 0.9809}, \texttt{mc\_f1\_macro = 0.5865} a na Exp3
+\texttt{bin\_f1 = 0.9610}, \texttt{mc\_f1\_macro = 0.6052}, ale jeho
+offline výsledky boli citeľne slabšie než pri tuned single-stage modeli.
+
+\paragraph{Zhrnutie experimentu}
+
+Experiment 4 ukázal, že hodnotenie modelov výlučne na IID dátach
+nie je postačujúce pre realistické nasadenie. Scenáre zamerané
+na variabilitu dát (anti-template) a vyváženie tried (rebalancing)
+významne zlepšujú robustnosť modelov.
+
+Výsledky zároveň ukazujú, že kombinácia vhodného tréningového
+scenára, rozhodovacieho headu a dátovej špecializácie je kľúčová
+pre dosiahnutie optimálneho výkonu. Tuned single-stage model predstavuje
+robustné riešenie pre všeobecné nasadenie a offline generalizáciu,
+zatiaľ čo adapted+OVR je vhodný ako špecializovaný variant pre
+campaign benchmarky s výrazným header/auth alebo URL biasom.
+
+\subsubsection{Experiment 5 – Porovnanie heuristického, ML a hybridného prístupu na jednotnom benchmarku}\label{exp5}
+
+Cieľom Experimentu 5 bolo systematicky porovnať tri prístupy k detekcii podozrivých e-mailov
+– heuristický analyzátor, model strojového učenia a hybridné kombinácie – v jednotnom
+a reprezentatívnom benchmarku. Experiment nadväzuje na predchádzajúce experimenty a
+prepája ich do jedného hodnotiaceho rámca, ktorý umožňuje analyzovať robustnosť,
+generalizáciu a správanie modelov naprieč rôznymi typmi dát.
+
+\paragraph{Model setup}
+
+Ako reprezentant modelového prístupu bol použitý tuned single-stage model zo scenára
+\texttt{scenario\_m\_anti\_template\_feature\_regularized} s klasifikátorom
+\texttt{hybrid\_logreg} a vstupným režimom \texttt{text\_plus\_features}.
+Tento model bol zvolený na základe výsledkov Experimentu 4 \ref{exp4}, kde preukázal
+najlepší kompromis medzi offline robustnosťou, multiclass výkonom a generalizáciou.
+
+\paragraph{Zostavenie benchmarku}
+
+Na rozdiel od predchádzajúcich experimentov bol vytvorený jednotný benchmark,
+ktorý kombinuje tri typy dát:
+
+\begin{itemize}
+    \item \textbf{controlled benchmark} – kontrolované scenáre (Track A),
+    \item \textbf{realistic campaign} – simulované phishing kampane (Track B),
+    \item \textbf{offline generalization} – reálne distribuované dáta (\texttt{test\_deployment}).
+\end{itemize}
+
+Tento návrh umožňuje analyzovať nielen výkon modelu,
+ale aj jeho stabilitu pri zmene distribúcie dát.
+
+\paragraph{Porovnávané prístupy}
+
+V experimente boli porovnané štyri prístupy:
+
+\begin{itemize}
+    \item \texttt{heuristic\_only} – pravidlový systém,
+    \item \texttt{ml\_only} – model strojového učenia,
+    \item \texttt{hybrid\_a\_conservative} – ML model doplnený heuristickým override,
+    \item \texttt{hybrid\_b\_gated} – heuristika ako gating mechanizmus.
+\end{itemize}
+
+\paragraph{Celkové binárne výsledky}
+
+\begin{table}[H]
+\centering
+\caption{Globálne porovnanie metód na jednotnom benchmarke}
+\label{tab:global_comparison}
+\footnotesize
+\setlength{\tabcolsep}{4pt}
+\renewcommand{\arraystretch}{1.1}
+\resizebox{\columnwidth}{!}{%
+\begin{tabular}{lcccc}
+\toprule
+\textbf{Metóda} & \textbf{Acc} & \textbf{Bal Acc} & \textbf{F1} & \textbf{MCC} \\
+\midrule
+\texttt{heuristic\_only}         & 0.76 & 0.73 & 0.69 & 0.51 \\
+\texttt{ml\_only}                & \textbf{0.93} & \textbf{0.91} & \textbf{0.91} & \textbf{0.85} \\
+\texttt{hybrid\_a\_conservative} & 0.92 & 0.90 & 0.90 & 0.83 \\
+\texttt{hybrid\_b\_gated}        & 0.76 & 0.73 & 0.69 & 0.51 \\
+\bottomrule
+\end{tabular}%
+}
+\end{table}
+Výsledky ukazujú, že model strojového učenia dosahuje najlepší celkový výkon
+vo všetkých sledovaných metrikách. Hybrid A sa výkonom približuje ML modelu,
+avšak neprináša výrazné zlepšenie.
+
+Naopak hybrid B vykazuje prakticky identické výsledky ako heuristika,
+čo je dôsledkom jeho návrhu – heuristika tu slúži ako rozhodovací filter,
+a tým určuje finálne správanie systému.
+
+\paragraph{Výsledky podľa typu dát}
+
+\begin{table}[H]
+\centering
+\caption{Výkon metód podľa typu dát (F1 skóre)}
+\label{tab:method_performance}
+\footnotesize
+\setlength{\tabcolsep}{4pt}
+\renewcommand{\arraystretch}{1.1}
+\resizebox{\columnwidth}{!}{%
+\begin{tabular}{lcccc}
+\toprule
+\textbf{Skupina} & \textbf{Heuristika} & \textbf{ML} & \textbf{Hybrid A} & \textbf{Hybrid B} \\
+\midrule
+controlled benchmark   & 0.736 & 0.722 & \textbf{0.760} & 0.736 \\
+realistic campaign     & 0.80  & \textbf{0.94}  & 0.87  & 0.80 \\
+offline generalization & 0.04  & \textbf{0.93}  & 0.92  & 0.04 \\
+\bottomrule
+\end{tabular}%
+}
+
+\end{table}
+Táto analýza odhaľuje zásadné rozdiely medzi prístupmi:
+
+V kontrolovanom benchmarku dosahuje najlepší výkon hybrid A,
+čo naznačuje, že heuristické pravidlá môžu byť prínosné
+v prostredí s presne definovanými indikátormi.
+
+V realistických kampaniach však heuristika stráca presnosť,
+zatiaľ čo ML model dokáže efektívne generalizovať a zachytávať
+komplexnejšie vzory.
+
+Najvýraznejší rozdiel je v offline generalization,
+kde heuristika prakticky zlyháva (F1 = 0.04),
+čo potvrdzuje jej silnú závislosť na konkrétnych pravidlách
+a nízku schopnosť adaptácie na nové dáta.
+
+\paragraph{Multiclass výsledky}
+
+Multiclass hodnotenie bolo realizované na podmnožine 1250 vzoriek,
+pre ktoré bola dostupná ground truth klasifikácia.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lc}
+\hline
+Metóda & Macro F1 \\
+\hline
+heuristic\_only & 0.333 \\
+ml\_only & 0.679 \\
+hybrid\_a\_conservative & 0.679 \\
+hybrid\_b\_gated & 0.458 \\
+\hline
+\end{tabular}
+\caption{Multiclass porovnanie metód (macro F1). Tabuľka ukazuje schopnosť modelov rozlišovať medzi typmi útokov, čo predstavuje náročnejší scenár než binárna klasifikácia.}
+\end{table}
+
+Heuristický prístup nedokáže efektívne rozlišovať medzi jednotlivými typmi útokov,
+čo vedie k nízkemu výkonu. Model strojového učenia a hybrid A dosahujú výrazne
+lepšie výsledky, keďže využívajú komplexnejšie reprezentácie dát.
+
+Hybrid B vykazuje stredný výkon, čo opäť reflektuje jeho závislosť
+na heuristickom gating mechanizme.
+
+\paragraph{Interpretácia hybridných prístupov}
+
+Hybrid A predstavuje konzervatívne rozšírenie ML modelu,
+kde heuristika slúži ako dodatočný bezpečnostný mechanizmus.
+Jeho prínos je však obmedzený a závisí od konkrétneho nastavenia prahov.
+
+Hybrid B využíva heuristiku ako primárny filter,
+čo vedie k tomu, že jeho správanie je takmer identické
+s heuristickým prístupom. Tento výsledok ukazuje,
+že nevhodne navrhnutá integrácia heuristík môže potlačiť
+výhody modelu strojového učenia.
+
+\paragraph{Záver experimentu}
+
+Experiment 5 potvrdzuje, že model strojového učenia predstavuje
+najrobustnejší prístup naprieč rôznymi typmi dát.
+
+Heuristika je síce interpretovateľná a efektívna v kontrolovaných scenároch,
+avšak výrazne zlyháva pri generalizácii.
+
+Hybridné prístupy neprinášajú automatické zlepšenie výkonu,
+a ich úspešnosť závisí od konkrétneho spôsobu integrácie.
+
+Výsledky naznačujú, že heuristiky sú najvhodnejšie ako doplnkový
+alebo vysvetľujúci komponent, zatiaľ čo finálne rozhodovanie
+by malo byť založené na modeloch strojového učenia.
+
+
+\subsubsection{Experiment 6 – Porovnanie nášho analyzátora s nástrojom PhishTool}
+
+Cieľom Experimentu 6 bolo porovnať náš detekčný systém s externým nástrojom
+PhishTool v realistickom analytickom scenári. Na rozdiel od predchádzajúcich
+experimentov, ktoré sa zameriavali na automatizované vyhodnotenie modelov,
+tento experiment reflektuje praktické použitie nástrojov pri manuálnej
+analýze e-mailov.
+
+\paragraph{Dataset a scenár}
+
+Experiment bol realizovaný na menšom datasete (community-limit verzia),
+ktorý obsahoval celkovo 25 e-mailov.
+
+\begin{table}[!t]
+\centering
+\caption{Zloženie datasetu v Experimente 6}
+\label{tab:exp6_dataset}
+\footnotesize
+\setlength{\tabcolsep}{4pt}
+\renewcommand{\arraystretch}{1.1}
+\begin{tabular}{lcc}
+\toprule
+\textbf{Kategória} & \textbf{Trieda} & \textbf{Počet} \\
+\midrule
+realistic campaign & legit & 7 \\
+realistic campaign & phishing & 5 \\
+realistic campaign & spam & 4 \\
+realistic campaign & financial\_fraud & 4 \\
+\midrule
+controlled benchmark & spoofing\_header\_heavy & 2 \\
+controlled benchmark & url\_heavy & 3 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Takéto zloženie umožňuje kombinovať realistické scenáre s kontrolovanými
+prípadmi obsahujúcimi špecifické technické indikátory.
+
+Keďže nástroj PhishTool neposkytuje automatizované vyhodnotenie, ale slúži
+primárne ako analytický a vizualizačný nástroj, bolo potrebné pri tvorbe
+datasetu zvoliť vhodnú metodiku. Použitie plne kontrolovaného datasetu by
+viedlo k skresleniu výsledkov, keďže by boli vopred známe použité indikátory
+a typy manipulácií.
+
+Z tohto dôvodu bol dataset konštruovaný dvojfázovo. Najprv bolo náhodne
+vybraných 10 e-mailov z existujúcich datasetov (napr. Enron a interné datasety),
+ktoré slúžili ako realistické referenčné vzorky. Následne boli tieto e-maily
+použité ako vstupné príklady pre LLM, ktoré vygenerovalo ďalších 15 e-mailov.
+
+Výsledný dataset tak obsahuje kombináciu reálnych a syntetických správ,
+pričom pre syntetickú časť nie je explicitne známe presné rozdelenie tried
+ani prítomné anomálie. Tento prístup umožňuje simulovať realistickejšie
+podmienky analýzy, kde analytik nemá apriórnu znalosť o charaktere dát.
+
+\paragraph{Workflow experimentu}
+
+Experiment prebiehal v niekoľkých krokoch:
+
+\begin{enumerate}
+    \item výber reprezentatívnych \texttt{.eml} súborov,
+    \item export do datasetu,
+    \item item manuálna analýza pomocou nástroja PhishTool,
+    \item automatická analýza pomocou nášho nástroja (IOC extrakcia),
+    \item porovnanie výsledkov na úrovni:
+    \begin{itemize}
+        \item detegovaných indikátorov (IOC overlap),
+        \item finálneho rozhodnutia (classification).
+    \end{itemize}
+\end{enumerate}
+
+Manuálna analýza bola doplnená o kvalitatívne poznámky
+čo umožnilo hlbšie pochopiť rozdiely medzi nástrojmi.
+
+\paragraph{Decision-level porovnanie}
+
+\begin{table}[H]
+\centering
+\caption{Porovnanie rozhodnutí medzi nástrojmi a ground truth}
+\begin{tabular}{lcccc}
+\hline
+Porovnanie & Accuracy & Precision & Recall & F1 \\
+\hline
+Náš nástroj vs truth & 0.84 & 1.00 & 0.778 & 0.875 \\
+PhishTool vs truth & 0.92 & 0.90 & 1.00 & 0.947 \\
+\hline
+\end{tabular}
+
+\end{table}
+
+Zároveň bola pozorovaná zhoda medzi nástrojmi na úrovni 0.76.
+
+Výsledky ukazujú zásadný rozdiel v správaní oboch prístupov:
+
+\begin{itemize}
+    \item náš nástroj je \textbf{konzervatívnejší} – dosahuje vysokú precision (1.00),
+    ale nižší recall,
+    \item PhishTool je \textbf{citlivejší} – zachytí všetky útoky (recall = 1.00),
+    ale generuje viac false positives.
+\end{itemize}
+
+Konkrétne prípady false positives v PhishTool boli pozorované
+pri legitímnych e-mailoch (napr. exp6\_003, exp6\_008).
+
+\paragraph{Analýza IOC indikátorov}
+
+\begin{table}[H]
+\centering
+\caption{Zhoda detekcie URL a technických indikátorov}
+\begin{tabular}{lc}
+\hline
+Indikátor & Zhoda \\
+\hline
+shortener\_url & 1.00 \\
+ip\_url & 1.00 \\
+obfuscated\_url & 1.00 \\
+risky\_attachment & 1.00 \\
+anchor\_mismatch & 0.80 \\
+suspicious\_tld & 0.64 \\
+display\_name\_spoof & 0.28 \\
+\hline
+\end{tabular}
+\end{table}
+
+Silná zhoda bola pozorovaná pri technických URL indikátoroch,
+čo naznačuje, že tieto signály sú jednoznačné a dobre detegovateľné
+oboma nástrojmi.
+
+Naopak, najväčšie rozdiely sa objavili pri autentifikačných a spoofing indikátoroch.
+
+\paragraph{Case studies}
+
+Analýza konkrétnych prípadov ukázala, že najväčšie rozdiely
+nastávajú pri komplexných útokoch kombinujúcich viac signálov,
+najmä v kategóriách phishing a financial fraud.
+
+Typické problematické prípady zahŕňali:
+
+\begin{itemize}
+    \item kombináciu legitímne vyzerajúcich a škodlivých URL,
+    \item slabé alebo nejednoznačné autentifikačné signály,
+    \item sociálne inžinierstvo bez jasného technického indikátora.
+\end{itemize}
+
+\paragraph{Interpretácia výsledkov}
+
+Experiment ukazuje dva odlišné prístupy k detekcii:
+
+\begin{itemize}
+    \item náš analyzátor je presný a konzervatívny,
+    minimalizuje false positives,
+    \item naša analýza za pomoci PhishTool je agresívnejšia a citlivejšia,
+    zachytáva viac útokov, ale za cenu vyššieho počtu chýb.
+\end{itemize}
+
+Z praktického hľadiska to znamená, že pre skúseného bezpečnostného
+analytika predstavuje PhishTool silný nástroj, ktorý umožňuje detailnú
+manuálnu analýzu jednotlivých indikátorov a hlavičiek e-mailu.
+Poskytuje široké množstvo technických informácií, ktoré je možné
+interpretovať v kontexte konkrétneho incidentu.
+
+Na druhej strane, pre bežného používateľa alebo menej skúseného analytika
+je takýto výstup náročnejší na interpretáciu, keďže vyžaduje dobré
+porozumenie e-mailovým protokolom, autentifikačným mechanizmom
+a typickým znakom phishingových útokov.
+
+Navrhnutý analyzátor sa preto snaží tento problém riešiť tým, že
+zjednodušuje výsledok do priamo interpretovateľnej podoby.
+Používateľovi poskytuje okamžité vyhodnotenie spolu s vysvetlením,
+bez potreby hlbšej expertnej analýzy jednotlivých indikátorov.
+
+\paragraph{Záver experimentu}
+
+Experiment 6 potvrdzuje, že oba prístupy majú svoje výhody.
+
+PhishTool poskytuje detailnejšiu a citlivejšiu analýzu,
+ktorá je vhodná pre bezpečnostných expertov.
+
+Na druhej strane náš systém ponúka jednoduchšie,
+konzistentné a automatizované riešenie,
+ktoré je vhodnejšie pre bežných používateľov alebo
+automatizované spracovanie e-mailov.
+
+Najlepšie výsledky by bolo možné dosiahnuť kombináciou oboch prístupov,
+kde automatizovaný systém slúži ako prvá línia detekcie
+a manuálna analýza ako doplnkový krok pri zložitejších prípadoch.
+
+
+\subsubsection{Finálna konfigurácia detekčného systému}
+
+Na základe výsledkov experimentov 1 až 6 bola navrhnutá finálna konfigurácia
+detekčného systému, ktorá oddeľuje všeobecný robustný model od
+špecializovaného campaign-oriented variantu. Toto rozdelenie sa ukázalo
+ako metodicky čistejšie než snaha vynútiť jeden univerzálny model pre
+všetky typy dát.
+
+\paragraph{Zvolená konfigurácia}
+
+\begin{itemize}
+    \item \textbf{Primárny general/offline model:} \texttt{scenario\_m\_anti\_template\_feature\_regularized + hybrid\_logreg} v režime \texttt{text\_plus\_features} so SHAP-guided feature subsetom.
+    \item \textbf{Špecializovaný campaign variant:} campaign-style adaptačný tréning bez leakage, zúženie spam triedy a \textit{one-vs-rest} subclass hlava nad rovnakou textovo-feature reprezentáciou.
+    \item \textbf{Rozhodovanie:} finálne rozhodnutie realizuje ML model, pričom heuristika slúži ako doplnková vrstva pre risk score a explainability.
+    \item \textbf{Nasadenie:}
+    \begin{itemize}
+        \item pre všeobecné nasadenie a offline generalizáciu je preferovaný tuned single-stage model,
+        \item pre špecializované header/auth a URL-heavy campaign scenáre je vhodný adapted+OVR variant.
+    \end{itemize}
+    \item \textbf{Výstup systému:}
+    \begin{itemize}
+        \item binárny: \texttt{legit} vs \texttt{suspicious} (operatívne použitie),
+        \item multiclass: \texttt{legit/phishing/spam/financial\_fraud} (triage a prioritizácia).
+    \end{itemize}
+\end{itemize}
+
+\paragraph{Zdôvodnenie výberu}
+
+Výber finálnej konfigurácie vychádza z konzistentných výsledkov naprieč experimentami:
+
+\begin{itemize}
+    \item \textbf{Experiment 1 a 5:}
+    kombinovaný vstup \texttt{text\_plus\_features} dosahuje stabilne lepší výkon
+    než text-only alebo header-only prístup, čo potvrdzuje význam kombinácie
+    obsahových a technických signálov.
+    
+    \item \textbf{Experiment 4:}
+    scenáre typu M sú robustnejšie než scenáre L,
+    najmä na náročných splitoch (\texttt{test\_hard} a \texttt{test\_deployment}),
+    čo podporuje ich použitie v reálnom nasadení.
+    
+    \item \textbf{Experiment 5:}
+    model strojového učenia (\texttt{ml\_only}) dosahuje najlepší globálny výkon,
+    pričom výber konkrétneho variantu musí rešpektovať rozdiel medzi generalistickým
+    a campaign-specialized nastavením.
+    
+    \item \textbf{Experiment 2 a 3:}
+    heuristické indikátory sú veľmi presné na detekciu konkrétnych znakov,
+    no najväčšie zlepšenie priniesol až campaign-style adaptačný tréning,
+    zúženie spam triedy a OVR subclass hlava.
+    
+    \item \textbf{Experiment 6:}
+    porovnanie s nástrojom PhishTool ukazuje,
+    že explainability vrstva je dôležitá pre interpretáciu výsledkov,
+    avšak finálne rozhodovanie by malo zostať na strane ML modelu.
+\end{itemize}
+
+\paragraph{Zhrnutie}
+
+Výsledná architektúra systému reflektuje kombinovaný prístup,
+kde model strojového učenia predstavuje hlavný rozhodovací komponent
+a heuristika slúži ako doplnkový zdroj informácií. Zároveň sa ukázalo,
+že v praxi je vhodné rozlišovať medzi general/offline variantom modelu
+a špecializovaným campaign-oriented variantom pre úzko zamerané benchmarky.
+
+Takýto návrh umožňuje dosiahnuť vysokú presnosť pri zachovaní
+interpretovateľnosti výsledkov, čo je kľúčové pre praktické nasadenie.
+
+\subsubsection*{Limitácie a implikácie pre prax}
+
+Napriek dosiahnutým výsledkom má navrhnutý systém viacero limitácií,
+ktoré je potrebné zohľadniť pri jeho interpretácii a nasadení.
+
+\begin{itemize}
+    \item \textbf{Prekryv tried v multiclass úlohe:}
+    triedy \texttt{phishing}, \texttt{spam} a \texttt{financial\_fraud}
+    vykazujú výrazný štýlový prekryv,
+    čo vedie k chybám pri hraničných prípadoch a znižuje presnosť kategorizácie.
+
+    \item \textbf{Závislosť hlavičkových signálov od transportu:}
+    v experimentálnom prostredí (GoPhish/MailHog) dochádza k normalizácii
+    alebo strate autentifikačných hlavičiek,
+    čo znamená, že výsledky z kontrolovaných benchmarkov nie sú
+    plne prenositeľné do reálnej prevádzky.
+
+    \item \textbf{Obmedzenia heuristickej vrstvy:}
+    heuristika je citlivá na prítomnosť rizikových indikátorov,
+    avšak pri URL-heavy alebo urgentných správach generuje zvýšený počet
+    false positives, čo obmedzuje jej použitie ako samostatného rozhodovacieho nástroja.
+
+    \item \textbf{Limitovaný rozsah externého porovnania:}
+    Experiment 6 bol realizovaný na menšej vzorke dát
+    a zahŕňal manuálnu anotáciu,
+    čo obmedzuje štatistickú významnosť výsledkov.
+
+    \item \textbf{Citlivosť na zmenu distribúcie dát (concept drift):}
+    model je závislý od aktuálnych jazykových vzorov a techník útočníkov,
+    preto vyžaduje pravidelný re-tréning a aktualizáciu.
+
+\end{itemize}
+
+\paragraph{Implikácie pre prax}
+
+Z praktického pohľadu možno navrhnutý systém interpretovať ako
+kombináciu viacerých komplementárnych komponentov. Jadrom riešenia
+je robustný rozhodovací mechanizmus založený na strojovom učení,
+ktorý zabezpečuje automatizovanú detekciu podozrivých správ.
+Tento mechanizmus je doplnený heuristickou vrstvou, ktorá poskytuje
+interpretovateľné vysvetlenie rozhodnutí a umožňuje lepšie pochopenie
+identifikovaných rizík. Celkovo tak systém funguje ako podporný nástroj,
+ktorý je použiteľný nielen pre bezpečnostných analytikov, ale aj pre
+bežných používateľov bez hlbších odborných znalostí.
+
+Získané výsledky naznačujú, že pre bežného používateľa je vhodnejšie
+využiť automatizovaný analyzátor, ktorý poskytuje okamžité,
+konzistentné a jednoducho interpretovateľné rozhodnutia bez potreby
+detailnej znalosti problematiky. Naopak, pre skúseného bezpečnostného
+analytika predstavujú nástroje ako PhishTool hodnotný doplnok, ktorý
+umožňuje detailnú manuálnu analýzu jednotlivých indikátorov a hlbšie
+preskúmanie konkrétnych prípadov.
+
+Z pohľadu praktického nasadenia sa ako najefektívnejší javí kombinovaný
+prístup, v ktorom automatizovaný systém slúži ako prvá línia detekcie
+a filtrácie potenciálne rizikových správ, zatiaľ čo manuálna analýza
+je využívaná ako následný verifikačný a investigatívny krok.
+
+\paragraph{Záverečné zhodnotenie}
+
+Experimenty 1 až 6 ukazujú, že kombinácia modelov strojového učenia
+a heuristických indikátorov predstavuje efektívny prístup k detekcii
+phishingových a podvodných e-mailov.
+
+Kľúčovým poznatkom je, že heuristika by nemala byť použitá ako hlavný
+rozhodovací mechanizmus, ale ako doplnkový a vysvetľujúci komponent,
+ktorý zvyšuje dôveru v rozhodnutia modelu.
+
+Takto navrhnutý systém je schopný dosiahnuť vysokú presnosť,
+zachovať interpretovateľnosť a zároveň zostať prakticky použiteľný
+v reálnom prostredí.
+
+
+\section{Záver}
+
+Táto práca sa zaoberala problematikou bezpečnosti e-mailovej komunikácie, analýzou najčastejších hrozieb a návrhom systému na detekciu podozrivých e-mailov. V teoretickej časti boli predstavené princípy fungovania e-mailovej komunikácie, formát správ a techniky využívané pri útokoch, ako sú phishing, spam alebo spoofing, spolu s mechanizmami ochrany.
+
+V praktickej časti bol navrhnutý a implementovaný systém kombinujúci heuristický analyzátor a prístupy strojového učenia. Heuristický analyzátor umožňuje transparentnú a interpretovateľnú analýzu e-mailov na základe technických a obsahových indikátorov, zatiaľ čo modely strojového učenia poskytujú vyššiu presnosť a schopnosť generalizácie.
+
+Experimenty ukázali, že samotné heuristické prístupy dosahujú vysoký recall, avšak modelové prístupy poskytujú lepší kompromis medzi presnosťou a úplnosťou detekcie. Najlepšie výsledky boli dosiahnuté kombináciou textovej analýzy a odvodených príznakov, pričom finálny model preukázal dobrú schopnosť rozlišovať medzi legitímnymi a škodlivými e-mailmi aj v podmienkach blízkych reálnemu nasadeniu.
+
+Významným prínosom práce je návrh experimentálneho rámca s dôrazom na elimináciu problémov ako source leakage a template leakage, čo umožnilo realistickejšie hodnotenie modelov a ich robustnosti. Tento prístup zvyšuje dôveryhodnosť dosiahnutých výsledkov a ich prenositeľnosť do praxe.
+
+Do budúcnosti je možné prácu rozšíriť o využitie pokročilejších modelov hlbokého učenia, integráciu systému do reálneho prostredia e-mailových služieb a rozšírenie datasetov o nové typy útokov. Zároveň by bolo možné skúmať adaptívne a online učenie modelov na dynamicky sa meniace hrozby.
+
+\begin{thebibliography}{00}
+
+\bibitem{rfc5598}
+D. Crocker, ``Internet Mail Architecture,'' RFC 5598, Internet Engineering Task Force (IETF), Jul. 2009. [Online]. Available: https://www.rfc-editor.org/rfc/rfc5598.html
+
+\bibitem{rfc5321}
+J. Klensin, ``Simple Mail Transfer Protocol,'' RFC 5321, Internet Engineering Task Force (IETF), Oct. 2008. [Online]. Available: https://datatracker.ietf.org/doc/html/rfc5321
+
+\bibitem{rfc5322}
+P. Resnick, ``Internet Message Format,'' RFC 5322, Internet Engineering Task Force (IETF), Oct. 2008. [Online]. Available: https://datatracker.ietf.org/doc/html/rfc5322
+
+\bibitem{rfc2045}
+N. Freed and N. Borenstein, ``Multipurpose Internet Mail Extensions (MIME) Part One: Format of Internet Message Bodies,'' RFC 2045, Internet Engineering Task Force (IETF), Nov. 1996. [Online]. Available: https://www.rfc-editor.org/rfc/rfc2045
+
+\bibitem{rfc2046}
+N. Freed and N. Borenstein, ``Multipurpose Internet Mail Extensions (MIME) Part Two: Media Types,'' RFC 2046, Internet Engineering Task Force (IETF), Nov. 1996. [Online]. Available: https://datatracker.ietf.org/doc/html/rfc2046
+
+\bibitem{karim2019spam}
+A. Karim, S. Azam, B. Shanmugam, K. Kannoorpatti, and M. Jonkman, ``A comprehensive survey for intelligent spam email detection,'' IEEE Access, vol. 7, pp. 168261–168295, 2019. [Online]. Available: https://ieeexplore.ieee.org/document/8907831
+
+\bibitem{jakobsson2007phishing}
+M. Jakobsson and S. Myers, \textit{Phishing and Countermeasures: Understanding the Increasing Problem of Electronic Identity Theft}. Wiley-Interscience, 2006. [Online]. Available: https://download.e-bookshelf.de/download/0000/5686/57/L-G-0000568657-0002356793.pdf
+
+\bibitem{aurangzeb2017ransomware}
+K. Aurangzeb, M. Aleem, M. Iqbal, and M. Islam, ``Ransomware: A Survey and Trends,'' 2017. [Online]. Available: https://www.researchgate.net/publication/317380115\_Ransomware\_A\_Survey\_and\_Trends
+
+\bibitem{verma2017phishing}
+J. Stachowski, ``Analysis of Phishing Emails and Detection Techniques,'' M.S. thesis, St. Cloud State University, 2017. [Online]. Available: https://repository.stcloudstate.edu/msia\_etds/125/
+\bibitem{rfc7208}
+S. Kitterman, ``Sender Policy Framework (SPF) for Authorizing Use of Domains in Email, Version 1,'' RFC 7208, Internet Engineering Task Force (IETF), Apr. 2014. [Online]. Available: https://datatracker.ietf.org/doc/html/rfc7208
+
+\bibitem{rfc6376}
+M. Crocker, D. Hansen, and T. Kucherawy, ``DomainKeys Identified Mail (DKIM) Signatures,'' RFC 6376, Internet Engineering Task Force (IETF), Sep. 2011. [Online]. Available: https://datatracker.ietf.org/doc/html/rfc6376
+
+\bibitem{mailhog}
+I. Charlie, ``MailHog: Email testing tool for developers,'' GitHub repository. [Online]. Available: https://github.com/mailhog/MailHog
+
+\bibitem{gophish}
+J. Wright, ``GoPhish: Open-source phishing framework,'' GitHub repository. [Online]. Available: https://github.com/gophish/gophish
+
+\bibitem{phishtool}
+PhishTool, ``PhishTool: Platform for phishing analysis and response,'' [Online]. Available: https://www.phishtool.com
+
+\bibitem{chatgpt}
+OpenAI, ``ChatGPT,'' 2026. [Online]. Available: https://chat.openai.com. 
+Použité ako podporný nástroj pri úprave textu (gramatika, štylistika) a asistencii pri tvorbe programového riešenia.
+
+\bibitem{regexurl}
+J. D'Alessandro, ``Comprehensive Regex for URL Detection and Spam Filtering,'' 2023. [Online]. Available: https://johndalesandro.com/blog/comprehensive-regex-for-url-detection-and-spam-filtering/. 
+Použité ako inšpirácia pri návrhu regulárnych výrazov na detekciu URL adries v e-mailových správach.
+\end{thebibliography}
+
+\vspace{12pt}
+
+
+\end{document}
