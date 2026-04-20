@@ -952,9 +952,13 @@ Percentuálne zastúpenie jednotlivých zdrojov po stiahnutí datasetov je znáz
 
 Na základe tejto analýzy z predchadzajúcej kapitoly bolo potrebné v ďalších realizovať čistenie dát, zjednotenie schémy, deduplikáciu a návrh takých tréningových scenárov, ktoré by obmedzili vplyv nerovnováhy a zdrojového skreslenia na výsledný model.
 
-Na tento účel bol najprv implementovaný skript. Úlohou skriptu bolo načítať vstupné CSV súbory z rôznych datasetov, vyčistiť textové polia, odstrániť neplatné a duplicitné záznamy a zjednotiť výsledok do spoločnej schémy.
+Na tento účel bol implementovaný prípravný pipeline, ktorého úlohou bolo načítať vstupné CSV súbory z rôznych datasetov, vyčistiť textové polia, odstrániť neplatné a duplicitné záznamy a zjednotiť výsledok do spoločnej schémy. Dôležitou metodickou vlastnosťou finálnej verzie pipeline bolo oddelenie \textbf{modelového textu} a \textbf{surových polí}. Modelový text (
+\texttt{subject}, \texttt{body}, \texttt{text}) bol určený pre textovú reprezentáciu modelu, zatiaľ čo surové polia (
+\texttt{subject\_raw}, \texttt{body\_raw}, \texttt{text\_raw} a surové hlavičky) zostali zachované pre audit a extrakciu technických indikátorov.
 
-Každý email bol reprezentovaný textovými poľami subject, body a text, pričom sa zachovávala aj surová verzia textu (subject\_raw, body\_raw, text\_raw) pre potreby neskoršieho auditu. Tento dvojitý zápis – surový text a modelový text – sa ukázal ako dôležitý z hľadiska transparentnosti, pretože umožňoval spätne skontrolovať, akým spôsobom boli texty normalizované a ktoré transformácie boli aplikované pred tréningom modelu.
+Tento dvojitý zápis sa ukázal ako dôležitý nielen z hľadiska transparentnosti, ale aj z hľadiska korektnej extrakcie príznakov. V neskoršej iterácii experimentov sa totiž ukázalo, že časť nových URL a header feature mala v niektorých tréningových scenároch takmer nulové pokrytie, hoci v zdieľanom datasete boli príslušné informácie dostupné. Pipeline preto bola upravená tak, aby sa pri konštrukcii scenárov zachoval modelový text použitý na tréning, ale zároveň sa doplnili chýbajúce surové polia potrebné pre feature extraction.
+
+Konkrétne pri scenároch typu M sa surové tréningové polia obohacovali zo zdieľaného súboru \texttt{shared/train\_full.csv} podľa identifikátorov \texttt{row\_id} a \texttt{synthetic\_parent\_row\_id}. Takýto backfill nemenil text, na ktorom sa model učil, ale zvyšoval pokrytie technických príznakov používaných v heuristickej aj modelovej vrstve. Tým sa podarilo korektne zachytiť napríklad indikátory \texttt{display\_name\_spoof\_flag}, \texttt{message\_id\_domain\_mismatch}, \texttt{external\_domain\_url\_count}, \texttt{sender\_url\_domain\_mismatch\_ratio}, \texttt{obfuscated\_url\_count}, \texttt{mismatched\_anchor\_count} a \texttt{punycode\_url\_count}.
 
 Normalizácia zahŕňala najmä:
 \begin{itemize}
@@ -977,13 +981,13 @@ Ako kritický problém sa ukázalo najmä source leakage a template leakage. V p
     \item dobré výsledky aj pri baseline modeloch, ktoré mali prístup len k metadátam alebo informácii o zdroji.
 \end{itemize}
 
-Na elimináciu týchto problémov bola pipeline postupne rozšírená o viacero obranných mechanizmov. Najprv bola zavedená silnejšia textová normalizácia, následne source-aware spracovanie, explicitné limitovanie dominantných zdrojov, tokenové maskovanie výrazov prezrádzajúcich pôvod datasetu a napokon aj template-aware splitovanie a template-aware regulácia tréningových scenárov.
+Na elimináciu týchto problémov bola pipeline postupne rozšírená o viacero obranných mechanizmov. Najprv bola zavedená silnejšia textová normalizácia, následne source-aware spracovanie, explicitné limitovanie dominantných zdrojov, tokenové maskovanie výrazov prezrádzajúcich pôvod datasetu a napokon aj template-aware splitovanie a template-aware regulácia tréningových scenárov. V záverečnej iterácii pribudla aj SHAP-guided kontrola feature priestoru, ktorá umožnila rozlíšiť, ktoré ručne definované príznaky prinášajú reálny prínos a ktoré sú v danom scenári prakticky neaktívne.
 
 Výsledkom nebol jeden jediný dataset, ale sada tréningových scenárov A–M, ktoré zdieľali spoločné evaluačné splity a líšili sa iba stratégiou konštrukcie tréningovej množiny. Takýto návrh umožnil systematicky skúmať, ktoré opatrenia majú pozitívny vplyv na robustnosť modelu a ktoré naopak vedú len k optickému zlepšeniu metrík.
 
 \textbf{Návrh spoločných evaluačných splitov}
 
-Jednou z najdôležitejších metodických zmien bolo zavedenie zdieľaných splitov, ktoré sú spoločné pre všetky scenáre. Vďaka tomu bolo možné férovo porovnávať jednotlivé tréningové stratégie, keďže rozdiely vo výsledkoch nevznikali z iného náhodného rozdelenia dát, ale priamo zo spôsobu konštrukcie tréningovej množiny.
+Jednou z najdôležitejších metodických zmien bolo zavedenie zdieľaných splitov, ktoré sú spoločné pre všetky scenáre. Vďaka tomu bolo možné férovo porovnávať jednotlivé tréningové stratégie, keďže rozdiely vo výsledkoch nevznikali z iného náhodného rozdelenia dát, ale priamo zo spôsobu konštrukcie tréningovej množiny. Finálna verzia prípravného skriptu preto pri vytváraní scenára už negenerovala nové splity, ale explicitne \textbf{reused existujúce train/val/test rozdelenie} a menila len pravidlá konštrukcie tréningovej časti.
 
 Takto navrhnuté rozdelenie má viacero výhod. Sedemdesiatpäť percent dát v train\_pool poskytuje dostatok variability na učenie rozhodovacích hraníc aj pri minoritných triedach. Desaťpercentný validačný split je dostatočne veľký na stabilný model selection, no zároveň neuberá príliš veľa tréningových dát. Desaťpercentný IID test zabezpečuje porovnateľnosť s bežnou literatúrou, zatiaľ čo deployment a hard splity poskytujú realistickejší obraz o generalizácii mimo komfortnej distribúcie.
 \begin{table}[H]
@@ -1070,6 +1074,8 @@ Okrem textovej reprezentácie emailov boli extrahované aj základné číselné
 
 Tieto príznaky boli využité jednak v heuristickom skórovaní, jednak ako doplnkové vstupy v hybridných modeloch. Z dôvodu obmedzenia závislosti modelu od týchto príznakov bol v pokročilých scenároch aplikovaný prístup feature regularization a čiastočný feature dropout.
 
+V neskoršej fáze práce bol feature priestor auditovaný pomocou SHAP analýzy. Tá ukázala, že časť ručne navrhnutých príznakov neprináša v generalistickom scenári M reálny zisk, pretože je v tréningových dátach prakticky neaktívna alebo redundatná. Finálny general/offline model preto nevyužíva celý pôvodný zoznam numerických príznakov, ale iba SHAP-guided subset 11 najužitočnejších feature. Medzi najstabilnejšie zostávajúce príznaky patrili najmä \texttt{subject\_len}, \texttt{uppercase\_ratio}, \texttt{digit\_ratio}, \texttt{sender\_receiver\_domain\_mismatch}, \texttt{financial\_keyword\_count}, \texttt{exclamation\_count} a ďalšie frekvenčné alebo štylistické indikátory.
+
 \textbf{Tréning modelov a porovnávané architektúry}
 
 Na klasifikáciu emailov boli použité predovšetkým lineárne modely vhodné pre sparse textové reprezentácie. Ich hlavnými výhodami sú rýchlosť tréningu, nízka pamäťová náročnosť, stabilita a dobrá interpretovateľnosť. V experimentoch boli porovnávané najmä nasledujúce architektúry:
@@ -1081,13 +1087,15 @@ Na klasifikáciu emailov boli použité predovšetkým lineárne modely vhodné 
     \item hybrid\_sgd\_hinge.
 \end{itemize}
 
+Okrem samotného lineárneho klasifikátora boli neskôr testované aj rôzne rozhodovacie hlavy nad rovnakou textovo-feature reprezentáciou. Základnou voľbou bol multiclass single-stage model, ktorý priamo predikuje jednu zo štyroch cieľových tried. Pre špecializované campaign benchmarky bol následne doplnený aj variant s \textit{one-vs-rest} subclass hlavou, ktorý po binárnom oddelení triedy \texttt{legit} samostatne skóruje triedy \texttt{phishing}, \texttt{spam} a \texttt{financial\_fraud}. Tento OVR prístup sa ukázal ako užitočný najmä v situáciách, kde pôvodný multiclass model kolaboval viaceré škodlivé triedy do jednej dominantnej kategórie.
+
 \textbf{Výber vstupnej reprezentácie}
 
 Kľúčovým rozhodnutím pri návrhu klasifikačného modelu bolo určenie vhodnej vstupnej reprezentácie emailových správ. V počiatočných experimentoch boli analyzované redukované pohľady na dáta, konkrétne \texttt{header\_only}, \texttt{subject\_only} a \texttt{body\_only}. Tieto varianty umožnili pochopiť, aký typ informácie nesie najväčší diskriminačný signál.
 
 Finálne experimenty však ukázali, že najlepší výkon poskytuje kombinovaný vstup \texttt{text\_plus\_features}, ktorý spája textový obsah správy (predmet a telo emailu) s odvodenými číselnými príznakmi založenými na hlavičkách a štruktúre správy. Tento prístup umožňuje modelu využívať nielen sémantický obsah, ale aj doplnkové heuristické signály relevantné z pohľadu emailovej bezpečnosti.
 
-Porovnanie jednotlivých vstupných reprezentácií pre finálny model scenára M je znázornené na obrázku~\ref{fig:input_comparison_final_m}. Z grafu je zrejmé, že varianty \texttt{header\_only} a \texttt{subject\_only} dosahujú výrazne nižšie hodnoty macro F1, čo naznačuje, že tieto časti emailu samy osebe neposkytujú dostatočne robustný signál pre klasifikáciu.
+Porovnanie jednotlivých vstupných reprezentácií pre tuned single-stage model scenára M je znázornené na obrázku~\ref{fig:input_comparison_final_m}. Z grafu je zrejmé, že varianty \texttt{header\_only} a \texttt{subject\_only} dosahujú výrazne nižšie hodnoty macro F1, čo naznačuje, že tieto časti emailu samy osebe neposkytujú dostatočne robustný signál pre klasifikáciu.
 
 Reprezentácia \texttt{body\_only} prináša výrazné zlepšenie, čím sa potvrdzuje, že rozhodujúca informácia je obsiahnutá najmä v texte správy. Napriek tomu však najlepšie výsledky dosahuje kombinovaný prístup \texttt{text\_plus\_features}, ktorý konzistentne prekonáva všetky ostatné varianty naprieč evaluačnými splitmi vrátane náročných scenárov \texttt{test\_hard\_source}, \texttt{test\_hard\_cluster} a \texttt{test\_deployment}.
 
@@ -1096,17 +1104,17 @@ Tento výsledok potvrdzuje, že vhodne navrhnuté heuristické príznaky dokáž
 \begin{figure}[H]
     \centering
     \includegraphics[width=1\linewidth]{final_model_m_input_representation.pdf}
-    \caption{Porovnanie vstupných reprezentácií pre finálny model scenára M (hybrid\_logreg).}
+    \caption{Porovnanie vstupných reprezentácií pre tuned single-stage model scenára M (hybrid\_logreg).}
     \label{fig:input_comparison_final_m}
 \end{figure}
 
-\textbf{Single-stage vs. two-stage prístup} 
+\textbf{Single-stage, OVR subclass head a two-stage prístup} 
 
-V experimentálnej časti boli porovnané dva základné prístupy ku klasifikácii. Prvým bol single-stage model, ktorý priamo priraďuje email do jednej z cieľových tried. Druhým bol two-stage prístup, pri ktorom prvá fáza rozhoduje medzi benign a suspicious správami a druhá fáza následne rozlišuje konkrétnu kategóriu medzi podozrivými správami.
+V experimentálnej časti boli porovnané tri základné prístupy ku klasifikácii. Prvým bol single-stage model, ktorý priamo priraďuje email do jednej z cieľových tried. Druhým bol OVR subclass head, pri ktorom sa po oddelení legitímnych správ samostatne odhadujú skóre pre jednotlivé podozrivé triedy. Tretím bol two-stage prístup, pri ktorom prvá fáza rozhoduje medzi benign a suspicious správami a druhá fáza následne rozlišuje konkrétnu kategóriu medzi podozrivými správami.
 
-Two-stage prístup je intuitívne atraktívny, pretože kopíruje viacúrovňové rozhodovanie známe z bezpečnostných systémov. V našich experimentoch však nepriniesol konzistentné zlepšenie oproti single-stage klasifikácii. Naopak, vo viacerých benchmarkoch boli single-stage modely stabilnejšie a jednoduchšie interpretovateľné. Okrem toho majú single-stage modely nižšiu implementačnú a prevádzkovú komplexitu, čo je dôležité z pohľadu budúceho nasadenia.
+Plný two-stage prístup je intuitívne atraktívny, pretože kopíruje viacúrovňové rozhodovanie známe z bezpečnostných systémov. V našich experimentoch však nepriniesol konzistentné zlepšenie oproti single-stage klasifikácii. Naopak, vo viacerých benchmarkoch boli single-stage modely stabilnejšie a jednoduchšie interpretovateľné. OVR subclass hlava sa ukázala ako zaujímavý kompromis: na všeobecných offline splitoch neprekonala tuned single-stage model, ale na špecializovaných header/auth a URL campaign benchmarkoch priniesla výrazné zlepšenie multiclass diskriminácie.
 
-Z týchto dôvodov bol single-stage prístup zvolený ako hlavný produkčný smer a two-stage bol ponechaný ako porovnávacia vetva vhodná do experimentálnej a diskusnej časti práce.
+Z týchto dôvodov bol single-stage prístup zvolený ako hlavný general/offline smer a two-stage bol ponechaný ako porovnávacia vetva vhodná do experimentálnej a diskusnej časti práce. OVR subclass hlava bola nakoniec zaradená ako špecializovaný campaign-oriented variant nad rovnakým scenárom M.
 
 \textbf{Evaluačný protokol a výber metrík}
 
@@ -1125,20 +1133,18 @@ V počiatočnej binárnej fáze bola hlavná pozornosť venovaná metrikám \tex
 
 \subsubsection{Výber finálnych scenárov a modelov}
 
-Na základe realizovaných experimentov sa ako najrelevantnejší ukázal scenár M a jeho tréningové varianty, ktoré počas experimentov ďalej evolvovali. Pôvodný scenár M poskytol metodicky čistý anti-template základ, avšak počas tréningu sa ukázalo, že cielená úprava distribúcie minoritných tried vedie k ďalšiemu zlepšeniu multiclass výkonu na kampanových dátach.
+Na základe realizovaných experimentov sa ako najrelevantnejší ukázal scenár M a jeho ďalšie odvodené varianty. Pôvodný scenár M poskytol metodicky čistý anti-template základ, ku ktorému boli neskôr pridané dve rôzne optimalizačné vetvy.
 
-Z tohto dôvodu bol ako hlavný model zvolený tréningový variant:
+Prvou vetvou bol SHAP-guided tuned single-stage model, ktorý zachováva metodickú čistotu scenára M, ale redukuje feature priestor na najstabilnejší subset a upravuje tréningové váhy. Tento variant sa ukázal ako najsilnejší z pohľadu všeobecnej robustnosti na shared offline splitoch a preto bol zvolený ako primárny general/offline model:
 \begin{itemize}
-    \item \textbf{Primárny model:} \\
-    \textit{scenario\_m\_rebalanced+ hybrid\_logreg + text\_plus\_features}
+    \item \textbf{Primárny general/offline model:} \\
+    \textit{scenario\_m\_anti\_template\_feature\_regularized + hybrid\_logreg + text\_plus\_features + SHAP-guided feature subset}
 \end{itemize}
 
-Tento variant vznikol z pôvodného scenára M cieleným rebalancingom minoritných tried, najmä \texttt{financial\_fraud} a \texttt{spam}, a následne bol ďalej jemne doladený triedovým škálovaním.
-
-Ako sekundárny model bol ponechaný metodicky čistý variant pôvodného scenára M:
+Druhou vetvou bol campaign-specialized variant, ktorý kombinuje ne-leaky campaign-style adaptačný tréning, zúženie spam triedy a OVR subclass hlavu. Tento variant sa ukázal ako najsilnejší na špecializovaných kampaniach z Experimentov 2 a 3:
 \begin{itemize}
-    \item \textbf{Sekundárny model:} \\
-    \textit{scenario\_m\_anti\_template\_feature\_regularized + hybrid\_logreg + text\_plus\_features}
+    \item \textbf{Špecializovaný campaign model:} \\
+    \textit{scenario\_m\_anti\_template\_feature\_regularized + hybrid\_logreg + text\_plus\_features + adaptation + spam narrowing + OVR}
 \end{itemize}
 
 Pre referenčné porovnanie ostal zachovaný aj silný anti-source baseline zo scenára L:
@@ -1147,7 +1153,7 @@ Pre referenčné porovnanie ostal zachovaný aj silný anti-source baseline zo s
     \textit{scenario\_l\_combined\_anti\_source + hybrid\_sgd\_log + text\_plus\_features}
 \end{itemize}
 
-Takto definovaný výber lepšie odráža reálny tréningový vývoj než pôvodné porovnanie L verzus M v izolovanej podobe.
+Takto definovaný výber lepšie odráža reálny tréningový vývoj než pôvodné porovnanie L verzus M v izolovanej podobe a zároveň vysvetľuje, prečo sa v neskorších kapitolách objavujú dva rôzne „finálne“ modely podľa typu evaluácie.
 
 \subsubsection{Porovnanie finálnych kandidátov na robustnostných splitoch}
 
@@ -1166,18 +1172,19 @@ Na náročných splitoch boli dosiahnuté tieto hodnoty \texttt{f1\_macro}:
 \renewcommand{\arraystretch}{1.1}
 \begin{tabular}{lccc}
 \toprule
-\textbf{Dataset} & \textbf{L+SGD} & \textbf{M+SGD} & \textbf{M+LogReg} \\
+\textbf{Dataset} & \textbf{L+SGD} & \textbf{M baseline} & \textbf{Tuned single-stage} \\
 \midrule
-test\_hard\_source   & 0.694 & 0.801 & 0.802 \\
-test\_hard\_cluster  & 0.820 & 0.811 & 0.848 \\
-test\_deployment     & 0.876 & 0.895 & 0.896 \\
+test\_hard\_source   & 0.694 & 0.802 & 0.874 \\
+test\_hard\_cluster  & 0.820 & 0.848 & 0.864 \\
+test\_deployment     & 0.876 & 0.896 & 0.908 \\
 \bottomrule
 \end{tabular}
 
 \end{table}
 
 Výsledky potvrdzujú, že scenár M je robustnejší na source-shift splite
-a konfigurácia \textit{M + hybrid\_logreg} dosahuje najlepší celkový kompromis na náročných testoch.
+a SHAP-guided tuned single-stage konfigurácia \textit{M + hybrid\_logreg}
+dosahuje najlepší celkový kompromis na náročných testoch.
 
 \begin{figure}[H]
     \centering
@@ -1189,21 +1196,21 @@ a konfigurácia \textit{M + hybrid\_logreg} dosahuje najlepší celkový komprom
 
 \textbf{Analýza finálneho modelu}
 
-Ako finálny model bol zvolený variant:
-\texttt{scenario\_m\_rebalanced\_fraud\_spam + hybrid\_logreg + text\_plus\_features}
-s jemným triedovým škálovaním pre \texttt{financial\_fraud:1.1}.
+Ako finálny general/offline model bol zvolený variant:
+\texttt{scenario\_m\_anti\_template\_feature\_regularized + hybrid\_logreg + text\_plus\_features}
+so SHAP-guided feature subsetom a tuned class scalingom.
 
 Pre objektívne zhodnotenie bol model analyzovaný na nezávislom testovacom splite \texttt{test\_deployment}, ktorý lepšie reprezentuje podmienky reálneho nasadenia než experimentálne dáta z kampane.
 
 Konfúzna matica finálneho modelu je znázornená na obrázku~\ref{fig:confusion_matrix}. Z výsledkov je možné pozorovať niekoľko kľúčových charakteristík.
 
-Trieda \texttt{legit} je klasifikovaná veľmi spoľahlivo, čo dokumentuje vysoký počet správne klasifikovaných vzoriek (14748) a relatívne nízky počet chýb smerom k ostatným triedam (najmä 244 do \texttt{phishing} a 245 do \texttt{spam}). To naznačuje, že model dokáže robustne odlišovať bežnú komunikáciu od škodlivého obsahu.
+Trieda \texttt{legit} je klasifikovaná veľmi spoľahlivo, čo dokumentuje vysoký počet správne klasifikovaných vzoriek (14916) a relatívne nízky počet chýb smerom k ostatným triedam (najmä 141 do \texttt{phishing} a 187 do \texttt{spam}). To naznačuje, že model dokáže robustne odlišovať bežnú komunikáciu od škodlivého obsahu.
 
-Trieda \texttt{phishing} dosahuje taktiež veľmi dobré výsledky (2642 správne klasifikovaných vzoriek), pričom chyby sú rozdelené medzi \texttt{spam} (46 prípadov) a \texttt{legit} (36 prípadov). Tento vzor chýb odráža prirodzené prekrytie medzi manipulatívnym marketingovým obsahom a phishingovými technikami.
+Trieda \texttt{phishing} dosahuje taktiež veľmi dobré výsledky (2616 správne klasifikovaných vzoriek), pričom chyby sú rozdelené medzi \texttt{spam} (46 prípadov) a \texttt{legit} (64 prípadov). Tento vzor chýb odráža prirodzené prekrytie medzi manipulatívnym marketingovým obsahom a phishingovými technikami.
 
-Trieda \texttt{financial\_fraud} je klasifikovaná stabilne (336 správnych klasifikácií), pričom väčšina chýb smeruje do triedy \texttt{spam} (20 prípadov). Tento jav je očakávaný, keďže finančné podvody často využívajú podobné jazykové vzory ako agresívny marketing alebo spam.
+Trieda \texttt{financial\_fraud} je klasifikovaná stabilne (332 správnych klasifikácií), pričom väčšina chýb smeruje do triedy \texttt{spam} (20 prípadov). Tento jav je očakávaný, keďže finančné podvody často využívajú podobné jazykové vzory ako agresívny marketing alebo spam.
 
-Najproblematickejšou triedou ostáva \texttt{spam}. Aj keď model správne klasifikoval 805 vzoriek, dochádza k zámene so \texttt{phishing} (11 prípadov) a \texttt{legit} (13 prípadov). To naznačuje, že hranica medzi spamom a ostatnými kategóriami je v reálnych dátach menej jednoznačná a výrazne závisí od kontextu správy.
+Najproblematickejšou triedou ostáva \texttt{spam}. Aj keď model správne klasifikoval 799 vzoriek, dochádza k zámene s \texttt{legit} (21 prípadov) a \texttt{phishing} (9 prípadov). To naznačuje, že hranica medzi spamom a ostatnými kategóriami je v reálnych dátach menej jednoznačná a výrazne závisí od kontextu správy.
 
 \begin{figure}[H]
     \centering
@@ -1216,7 +1223,7 @@ Z pohľadu praktického nasadenia model vykazuje veľmi dobrú schopnosť rozli�
 
 Dôležitým pozorovaním je rozdiel medzi experimentálnymi dátami (Experiment 1) a testovacím splitom. Kým v Experiment 1 modely dosahovali takmer nulový počet false positive prípadov, na \texttt{test\_deployment} sa objavuje realistickejší trade-off medzi precision a recall. Tento rozdiel potvrdzuje, že model nie je preučený na syntetické alebo kampanové dáta, ale zachováva schopnosť generalizácie na širšiu distribúciu emailov.
 
-Z pohľadu metodickej čistoty aj praktického použitia sa tento variant javí ako najvhodnejší finálny model. Sekundárny model založený na pôvodnom scenári M ostáva referenčným bodom a baseline zo scenára L slúži ako porovnávacia anti-source konfigurácia.
+Z pohľadu metodickej čistoty aj praktického použitia sa tento variant javí ako najvhodnejší finálny general/offline model. Campaign-specialized adapted+OVR ostáva dôležitým doplnkovým variantom pre špecializované benchmarky, no baseline zo scenára L naďalej slúži ako porovnávacia anti-source konfigurácia.
 
 \subsubsection{Zhrnutie navrhnutého riešenia}
 
@@ -1386,11 +1393,11 @@ Na rovnakých dátach bol vykonaný aj priamy porovnávací experiment medzi heu
 \begin{figure}[H]
     \centering
     \includegraphics[width=0.9\linewidth]{exp1_model_comparison.pdf}
-    \caption{Porovnanie F1, balanced accuracy a MCC medzi heuristikou a modelmi.}
+    \caption{Porovnanie heuristického prístupu, tuned single-stage modelu a campaign-specialized variantu adapted+OVR na kampani z Experimentu 1.}
     \label{fig:exp1_model_comparison}
 \end{figure}
 
-Z grafu je zrejmé, že heuristický analyzátor dosahuje vysoký recall a F1 skóre, avšak výrazne zaostáva v metrikách balanced accuracy a MCC. Naopak, modelové prístupy poskytujú stabilnejšiu separáciu tried a lepší kompromis medzi precision a recall :contentReference[oaicite:1]{index=1}.
+Z grafu je zrejmé, že heuristický analyzátor dosahuje vysoký recall, avšak výrazne zaostáva v metrikách balanced accuracy a MCC. Tuned single-stage model a variant adapted+OVR obe poskytujú stabilnejšiu separáciu tried a lepší kompromis medzi precision a recall. Variant adapted+OVR dosahuje na zmiešanej kampani mierne vyššie binárne F1, no jeho zisk sa nepretavuje do lepšieho multiclass výkonu.
 
 \paragraph{Multiclass modelové výsledky scenárov L a M}
 
@@ -1399,11 +1406,11 @@ Na dátach z aktuálneho sender-clean runu boli následne vyhodnotené scenáre 
 \begin{figure}[H]
     \centering
     \includegraphics[width=0.9\linewidth]{exp1_multiclass_method_comparison.pdf}
-    \caption{Porovnanie multiclass výkonu heuristiky, modelu a ich kombinácie.}
+    \caption{Porovnanie multiclass metrík heuristiky, tuned single-stage modelu a variantu adapted+OVR na dátach Experimentu 1.}
     \label{fig:exp1_multiclass_comparison}
 \end{figure}
 
-Výsledky ukazujú, že samotná heuristika dosahuje výrazne nižší multiclass výkon než modelové prístupy. Modely založené na scenári M dosahujú najlepšie výsledky, pričom kombinácia textu a feature-ov (\texttt{text\_plus\_features}) prináša výrazné zlepšenie oproti čisto textovému vstupu :contentReference[oaicite:2]{index=2}.
+Výsledky ukazujú, že samotná heuristika dosahuje výrazne nižší multiclass výkon než modelové prístupy. Na zmiešanom sender-clean benchmarku ostáva najsilnejším multiclass variantom tuned single-stage model zo scenára M (\texttt{mc\_f1\_macro = 0.6213}), zatiaľ čo adapted+OVR dosahuje porovnateľné, ale mierne nižšie skóre (\texttt{0.6198}). To naznačuje, že campaign-style adaptácia pomáha najmä na úzko špecializovaných benchmarkoch, nie na obsahovo zmiešanej kampani Experimentu 1.
 
 \paragraph{Analýza finálneho modelu na dátach experimentu}
 
@@ -1412,11 +1419,11 @@ Detailnejší pohľad na správanie finálneho modelu poskytuje konfúzna matica
 \begin{figure}[H]
     \centering
     \includegraphics[width=0.9\linewidth]{exp1_m_confusion_best_final.pdf}
-    \caption{Konfúzna matica finálneho modelu na dátach Experimentu 1.}
+    \caption{Konfúzna matica tuned single-stage modelu na dátach Experimentu 1.}
     \label{fig:exp1_confusion_matrix}
 \end{figure}
 
-Z konfúznej matice je možné pozorovať, že model veľmi spoľahlivo klasifikuje triedy \texttt{legit} a \texttt{financial\_fraud}, pričom najväčšie problémy vznikajú pri triede \texttt{spam}. Tá je často zamieňaná s \texttt{phishing}.
+Z konfúznej matice je možné pozorovať, že tuned single-stage model veľmi spoľahlivo klasifikuje triedy \texttt{legit}, \texttt{phishing} a \texttt{financial\_fraud}, pričom najväčšie problémy vznikajú pri triede \texttt{spam}. Tá zostáva najčastejšie zamieňaná s \texttt{phishing}, čo je konzistentné aj s ostatnými experimentmi.
 
 \paragraph{Interpretácia výsledkov}
 
@@ -1437,12 +1444,9 @@ Experiment 1 potvrdil funkčnosť celej pipeline:
 \text{generovanie} \rightarrow \text{seeding} \rightarrow \text{zber} \rightarrow \text{analýza} \rightarrow \text{klasifikácia}.
 \]
 
-Z pohľadu výsledkov sa ako najlepší model pre tento typ experimentov ukázal variant:
+Z pohľadu výsledkov sa ako najsilnejší \textbf{generalistický} variant pre Experiment 1 ukázal retunovaný model \texttt{hybrid\_logreg} so vstupom \texttt{text\_plus\_features}. Pri finálnom kampanovom vyhodnotení s neutrálnymi class scales dosiahol na 250 doručených správach \texttt{bin\_f1 = 0.9727} a \texttt{mc\_f1\_macro = 0.6213}. Oproti staršiemu runu to predstavuje zlepšenie o \texttt{+0.0818} v binárnom F1 a o \texttt{+0.5027} v multiclass macro F1.
 
-\texttt{scenario\_m\_rebalanced\_fraud\_spam + hybrid\_logreg + text\_plus\_features}
-
-
-Tento model poskytol najlepší kompromis medzi multiclass výkonom, robustnosťou a schopnosťou generalizácie na reálne kampanové dáta. V porovnaní s heuristikou dosahuje stabilnejšie výsledky a lepšiu separáciu tried, pričom zároveň eliminuje závislosť na jednoduchých pravidlových signáloch.
+Dodatočne bol testovaný aj campaign-specialized variant s campaign-style adaptačným tréningom, zúženou spam triedou a \textit{one-vs-rest} subclass hlavou. Tento variant zvýšil binárne F1 na \texttt{0.9778}, ale multiclass macro F1 mierne kleslo na \texttt{0.6198}. Na zmiešanom benchmarku Experimentu 1 sa preto ako vhodnejšia voľba ukázal tuned single-stage model, zatiaľ čo adapted+OVR je výhodnejší najmä pre špecializované kampane z Experimentov 2 a 3.
 
 Heuristický analyzátor ostáva vhodným doplnkom pre prvotný screening, avšak pre finálnu klasifikáciu a rozhodovanie je model založený na scenári M jednoznačne vhodnejšou voľbou.
 
@@ -1513,17 +1517,17 @@ V binárnom hodnotení (legit vs. suspicious) dosiahli jednotlivé prístupy nas
 \textbf{Prístup} & \textbf{Acc} & \textbf{Bal Acc} & \textbf{Prec} & \textbf{Rec} & \textbf{F1} \\
 \midrule
 \texttt{heuristic\_only}        & 0.80 & 0.50  & 0.80   & 1.00 & 0.8889 \\
-\texttt{ml\_only}               & \textbf{0.95} & \textbf{0.875} & \textbf{0.9412} & 1.00 & \textbf{0.9697} \\
-\texttt{heuristic\_plus\_ml}    & 0.85 & 0.625 & 0.8421 & 1.00 & 0.9143 \\
+\texttt{ml\_only}               & \textbf{0.97} & \textbf{0.9813} & \textbf{1.0000} & 0.9625 & \textbf{0.9809} \\
+\texttt{heuristic\_plus\_ml}    & 0.92 & 0.8188 & 0.9186 & 0.9875 & 0.9518 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
 Výsledky potvrdzujú, že heuristický analyzátor je veľmi citlivý na podozrivé správy, čo sa prejavuje maximálnym recall (\texttt{1.00}). Na druhej strane má nižšiu špecificitu, čo vedie k horšej hodnote balanced accuracy (\texttt{0.50}). Inými slovami, heuristika má tendenciu označovať väčší počet správ ako podozrivé, aj keď časť z nich patrí do triedy \texttt{legit}.
 
-Najlepší výkon dosiahol prístup \texttt{ml\_only}, ktorý poskytuje výrazne lepší kompromis medzi precision a recall a zároveň dosahuje najvyššiu hodnotu F1 skóre (\texttt{0.9697}). Kombinovaný prístup \texttt{heuristic\_plus\_ml} v tomto nastavení nepriniesol zlepšenie, čo naznačuje, že jednoduché prepojenie heuristiky a modelu bez dodatočného ladenia nemusí byť optimálne.
+Najlepší výkon dosiahol prístup \texttt{ml\_only}, ktorý v tomto experimente používa campaign-style adaptačný tréning, zúženie spam triedy a \textit{one-vs-rest} subclass hlavu. Tento variant poskytuje výrazne lepší kompromis medzi precision a recall a zároveň dosahuje najvyššiu hodnotu F1 skóre (\texttt{0.9809}). Kombinovaný prístup \texttt{heuristic\_plus\_ml} ostáva silný, no už nedosahuje výkon samostatného adaptovaného modelu.
 
-Z doplnkového pohľadu boli analyzované aj multiclass výsledky, ktoré však nie sú primárnym cieľom tohto experimentu. V tomto režime heuristika dosahuje nízke hodnoty (napr. \texttt{mc\_f1\_macro = 0.13}), čo je očakávané, keďže nie je navrhnutá na jemné rozlišovanie medzi triedami \texttt{phishing}, \texttt{spam} a \texttt{financial\_fraud}. Model strojového učenia dosahuje v multiclass nastavení výrazne lepšie výsledky (\texttt{mc\_f1\_macro = 0.53}), čo potvrdzuje jeho schopnosť detailnejšej kategorizácie.
+Z doplnkového pohľadu boli analyzované aj multiclass výsledky, ktoré však nie sú primárnym cieľom tohto experimentu. V tomto režime heuristika dosahuje nízke hodnoty (napr. \texttt{mc\_f1\_macro = 0.13}), čo je očakávané, keďže nie je navrhnutá na jemné rozlišovanie medzi triedami \texttt{phishing}, \texttt{spam} a \texttt{financial\_fraud}. Adaptovaný model strojového učenia dosahuje v multiclass nastavení výrazne lepší výsledok než pôvodný tuned single-stage variant (\texttt{mc\_f1\_macro = 0.5865} vs. \texttt{0.3262}). To ukazuje, že pri header/auth kampani bol hlavný problém v nesúlade medzi tréningovou distribúciou a campaign-style vstupmi, nie v samotnej kapacite modelu.
 
 Tieto výsledky ukazujú, že heuristika je vhodná najmä ako detektor podozrivosti (binárna úloha), zatiaľ čo model strojového učenia je nevyhnutný pre presnú multiclass klasifikáciu.
 
@@ -1533,19 +1537,19 @@ Výsledky experimentu poukazujú na rozdielnu úlohu jednotlivých prístupov:
 
 \begin{itemize}
     \item heuristický analyzátor funguje spoľahlivo ako detektor prítomnosti rizikových indikátorov,
-    \item model strojového učenia poskytuje lepšiu schopnosť rozlišovať medzi jednotlivými typmi útokov,
-    \item priame kombinovanie oboch prístupov bez dodatočného ladenia môže viesť k degradácii výkonu.
+    \item campaign-style adaptačný tréning bez leakage výrazne zlepšuje prenositeľnosť modelu na realistickú hlavičkovú kampaň,
+    \item zúženie spam triedy a \textit{one-vs-rest} subclass hlava znižujú kolaps tried \texttt{phishing} a \texttt{financial\_fraud} do \texttt{spam}.
 \end{itemize}
 
-Z pohľadu návrhu systému sa preto ako vhodné riešenie javí architektúra, v ktorej heuristický analyzátor slúži ako doplnkový alebo signalizačný modul (napr. pre vysvetliteľnosť alebo zvýraznenie rizikových príznakov), zatiaľ čo finálne rozhodovanie o kategórii správy je ponechané na model strojového učenia. Táto architektúra však nebola v rámci Experimentu 2 explicitne implementovaná ako produkčný pipeline, ale vyplýva z interpretácie dosiahnutých výsledkov.
+Z pohľadu návrhu systému sa preto ako vhodné riešenie javí architektúra, v ktorej heuristický analyzátor slúži ako doplnkový alebo signalizačný modul (napr. pre vysvetliteľnosť alebo zvýraznenie rizikových príznakov), zatiaľ čo finálne rozhodovanie o kategórii správy je ponechané na adaptovaný model strojového učenia. V tomto experimente sa ukázalo, že samotná úprava rozhodovacieho headu a zladenie tréningovej distribúcie s campaign-style vstupmi prinášajú väčší efekt než jednoduché pravidlové kombinovanie heuristiky a ML modelu.
 
 \paragraph{Záver experimentu}
 
 Experiment 2 potvrdil, že heuristický analyzátor a model strojového učenia majú v systéme odlišné, ale komplementárne úlohy.
 
-Heuristický analyzátor spoľahlivo deteguje explicitné bezpečnostné indikátory a funguje ako prvá vrstva rozhodovania (legit vs suspicious). Model strojového učenia následne zabezpečuje jemnejšie rozlíšenie medzi jednotlivými typmi škodlivých správ.
+Heuristický analyzátor spoľahlivo deteguje explicitné bezpečnostné indikátory a funguje ako prvá vrstva rozhodovania (legit vs suspicious). Najlepšie výsledky však v Track B dosiahol campaign-specialized model s adaptačným tréningom, zúžením spam triedy a \textit{one-vs-rest} subclass hlavou, ktorý dosiahol \texttt{bin\_f1 = 0.9809} a \texttt{mc\_f1\_macro = 0.5865}.
 
-Z metodického hľadiska sa preto ako najvhodnejší prístup javí využitie heuristiky ako doplnkového a vysvetľujúceho modulu, zatiaľ čo hlavné rozhodovanie o kategórii správy by malo byť ponechané na model strojového učenia.
+Z metodického hľadiska sa preto ako najvhodnejší prístup javí využitie heuristiky ako doplnkového a vysvetľujúceho modulu, zatiaľ čo hlavné rozhodovanie o kategórii správy by malo byť ponechané na adaptovaný model strojového učenia.
 
 
 \subsubsection{Experiment 3 – URL indikátory a ich vplyv na detekciu podozrivých správ}\label{epx3}
@@ -1571,16 +1575,16 @@ Na realistickej kampani boli porovnané tri prístupy: \texttt{heuristic\_only},
 \hline
 Metóda & Accuracy & Precision & Recall & F1 \\
 \hline
-heuristic\_only & 0.80 & 0.80 & 1.00 & 0.8889 \\
-ml\_only & 0.94 & 0.9625 & 0.9625 & 0.9625 \\
-heuristic\_plus\_ml & 0.87 & 0.8602 & 1.00 & 0.9249 \\
+heuristic\_only & 0.81 & 0.8081 & 1.00 & 0.8939 \\
+ml\_only & 0.94 & 1.0000 & 0.9250 & 0.9610 \\
+heuristic\_plus\_ml & 0.93 & 0.9195 & 1.00 & 0.9581 \\
 \hline
 \end{tabular}
 \end{table}
 
-Heuristický analyzátor dosahuje maximálny recall, čo znamená, že zachytáva všetky podozrivé správy. Na druhej strane však nedokáže efektívne odlišovať legitímne správy, čo sa prejavuje nulovým počtom true negative prípadov a vyšším počtom false positive.
+Heuristický analyzátor dosahuje maximálny recall, čo znamená, že zachytáva všetky podozrivé správy. Na druhej strane však nedokáže efektívne odlišovať legitímne správy, čo sa prejavuje vyšším počtom false positive.
 
-Model strojového učenia dosahuje najlepší celkový výkon a poskytuje vyvážený kompromis medzi precision a recall. Kombinovaný prístup zlepšuje heuristiku, avšak nedosahuje výkon samostatného modelu, čo naznačuje, že jednoduché pravidlá kombinácie nemusia byť optimálne.
+Po zavedení campaign-style adaptačného tréningu, zúženia spam triedy a \textit{one-vs-rest} subclass hlavy dosiahol samotný model strojového učenia na URL-heavy kampani najlepší binárny výkon (\texttt{F1 = 0.9610}). Kombinovaný prístup \texttt{heuristic\_plus\_ml} zostáva veľmi silný (\texttt{0.9581}), ale už neprináša zlepšenie nad adaptovaný ML model.
 
 \paragraph{Analýza URL indikátorov}
 
@@ -1600,7 +1604,7 @@ Doplnková analýza korelácie ukázala, že jednotlivé URL indikátory neprisp
 
 Heuristický analyzátor vykazuje zvýšenú chybovosť najmä pri absencii silných URL indikátorov, pričom má tendenciu označovať správy ako podozrivé aj v prípadoch, keď nie sú prítomné jednoznačné rizikové znaky.
 
-Model strojového učenia vykazuje vyváženejšie správanie a jeho chybovosť nie je priamo viazaná na prítomnosť konkrétneho indikátora.
+Model strojového učenia po adaptácii vykazuje vyváženejšie správanie a jeho chybovosť už nie je tak silno viazaná na jednoduchý kolaps všetkých podozrivých správ do triedy \texttt{spam}. V multiclass režime dosiahol \texttt{mc\_f1\_macro = 0.6052}, čo predstavuje výrazné zlepšenie oproti predchádzajúcemu tuned single-stage variantu (\texttt{0.3003}).
 
 \paragraph{Zachovanie indikátorov}
 
@@ -1610,7 +1614,7 @@ Výsledky ukazujú, že URL indikátory zostávajú zachované aj po transporte 
 
 Experiment 3 potvrdil, že URL indikátory predstavujú významný zdroj informácií pre detekciu podozrivých správ. Heuristický analyzátor je veľmi citlivý na prítomnosť týchto znakov, avšak má tendenciu k vyššiemu počtu false positive.
 
-Model strojového učenia poskytuje lepší celkový výkon a je vhodnejší pre finálne rozhodovanie. URL indikátory sú preto najvhodnejšie využiteľné ako doplnkový signál alebo vysvetľujúci faktor v rámci komplexnejšieho detekčného systému.
+Experiment 3 ukázal, že URL-heavy benchmark výrazne profituje z priblíženia tréningovej distribúcie ku campaign-style vstupom. Adaptovaný model s OVR subclass hlavou dokázal výrazne zlepšiť nielen binárny výkon, ale aj jemné multiclass rozlíšenie medzi \texttt{phishing}, \texttt{spam} a \texttt{financial\_fraud}. URL heuristiky preto ostávajú cenným doplnkovým signálom, no ich najlepší efekt sa dosiahol až po špecializácii tréningu a rozhodovacieho headu modelu.
 
 Výsledky Experimentu 3 zároveň potvrdzujú, že samotná prítomnosť URL indikátorov nie je postačujúca pre presné rozhodovanie a je potrebné ich kombinovať s komplexnejšími modelmi, ktoré dokážu lepšie zachytiť kontext správy.
 
@@ -1647,18 +1651,11 @@ oproti scenáru L.
 \begin{figure}[t]
 \centering
 \includegraphics[width=\linewidth]{exp4_trackA_deployment_macro_f1.pdf}
-\caption{Porovnanie modelov na \texttt{test\_deployment}. Najlepší výkon
-dosahuje scenár \texttt{m\_rebalanced\_fraud\_spam} s modelom SGD
-(macro F1 = 0.901).}
+\caption{Porovnanie tuned single-stage a adapted+OVR variantu na hlavných offline splitoch v Experimente 4 (Track A). Graf ukazuje, že adapted+OVR pomáha na špecializovaných campaign benchmarkoch, ale na shared offline splitoch zaostáva za tuned single-stage modelom.}
 \label{fig:exp4_trackA_deployment}
 \end{figure}
 
-Najlepší výsledok bol dosiahnutý v scenári
-\texttt{m\_rebalanced\_fraud\_spam} s modelom
-\texttt{hybrid\_sgd\_log}, ktorý dosahuje macro F1 = 0.901
-na \texttt{test\_deployment}. Tento výsledok potvrdzuje, že kombinácia
-anti-template prístupu a rebalancovania tried vedie k optimálnemu
-kompromisu medzi presnosťou a robustnosťou.
+Výsledky ukazujú, že tuned single-stage model ostáva na shared offline splitoch jednoznačne silnejší než adapted+OVR. Variant \texttt{scenario\_m\_anti\_template\_feature\_regularized + hybrid\_logreg} dosiahol na \texttt{test\_deployment} \texttt{macro F1 = 0.9076} a súčasne výrazne zlepšil výsledok na \texttt{test\_hard\_source} na \texttt{0.8744}. Dodatočne testovaný campaign-specialized variant adapted+OVR síce výrazne pomohol na Experimentoch 2 a 3, no na offline splitoch klesol na \texttt{0.8488} (\texttt{test\_iid}), \texttt{0.7538} (\texttt{test\_hard\_source}), \texttt{0.7966} (\texttt{test\_hard\_cluster}) a \texttt{0.8374} (\texttt{test\_deployment}).
 
 \paragraph{Vplyv architektúry modelu}
 
@@ -1694,9 +1691,14 @@ vstup pre finálne ML rozhodovanie.
 
 Výsledky z Track B potvrdzujú, že model vybraný na základe
 offline robustnostného hodnotenia si zachováva vysokú kvalitu
-aj v kampanovom prostredí. Táto časť preto slúži ako praktické
-overenie prenositeľnosti offline výsledkov do realistického
-nasadenia a dopĺňa štandardné hodnotenie na testovacích splitoch.
+aj v kampanovom prostredí. Na zmiešanej kampani z Experimentu 1
+dosiahol tuned single-stage variant \texttt{bin\_f1 = 0.9727}
+a \texttt{mc\_f1\_macro = 0.6213}. Campaign-specialized adapted+OVR
+variant dosiahol mierne vyššie binárne F1 (\texttt{0.9778}), ale
+multiclass výkon sa nezlepšil (\texttt{0.6198}). Táto časť preto
+slúži ako praktické overenie, že Exp1 ostáva najlepšie reprezentovaný
+generalistickým tuned modelom, zatiaľ čo adapted+OVR je vhodnejší
+pre úzko špecializované kampane.
 
 \paragraph{Track C – Multiclass doplnková analýza na špecializovaných kampaniach (Experimenty 2 a 3)}
 
@@ -1708,34 +1710,34 @@ Multiclass úloha zahŕňa triedy \texttt{legit}, \texttt{phishing},
 analytickú vrstvu, ktorá umožňuje detailnejšie posúdiť schopnosť
 modelu rozlišovať medzi jednotlivými typmi útokov.
 
-Na kampani z Experimentu~2 \ref{epx2} dosiahol model hodnoty
+Na kampani z Experimentu~2 \ref{epx2} dosiahol campaign-specialized
+variant adapted+OVR hodnoty
 \begin{itemize}
-    \item \texttt{mc\_accuracy = 0.51},
-    \item \texttt{mc\_balanced\_accuracy = 0.5975},
-    \item \texttt{mc\_f1\_macro = 0.5329}.
+    \item \texttt{mc\_accuracy = 0.58},
+    \item \texttt{mc\_balanced\_accuracy = 0.6404},
+    \item \texttt{mc\_f1\_macro = 0.5865}.
 \end{itemize}
 
 Na kampani z Experimentu~3 \ref{epx3} dosiahol
 \begin{itemize}
-    \item \texttt{mc\_accuracy = 0.52},
-    \item \texttt{mc\_balanced\_accuracy = 0.6125},
-    \item \texttt{mc\_f1\_macro = 0.5316}.
+    \item \texttt{mc\_accuracy = 0.60},
+    \item \texttt{mc\_balanced\_accuracy = 0.6829},
+    \item \texttt{mc\_f1\_macro = 0.6052}.
 \end{itemize}
 
 
-Pre kontext je vhodné uviesť vývoj multiclass výkonu v Experimente~1\ref{epx1},
-kde sa rovnaká úloha postupne zlepšovala v rámci iterácií scenára~M.
-Hodnota \texttt{mc\_f1\_macro}dosaihla až \texttt{0.7305}.
-Tento trend potvrdzuje, že kombinácia textových reprezentácií
-a ručne definovaných príznakov spolu s cieleným vyvážením tried
-výrazne zlepšuje schopnosť modelu vykonávať jemnejšiu multiclass
-diskrimináciu.
+Pre kontext je vhodné uviesť výkon v Experimente~1\ref{epx1},
+kde tuned single-stage model dosiahol \texttt{mc\_f1\_macro = 0.6213}.
+Adapted+OVR variant dosiahol na tej istej kampani \texttt{0.6198},
+čo potvrdzuje, že jeho prínos je viazaný najmä na špecializované
+header/auth a URL benchmarky, nie na obsahovo zmiešaný scenár.
 
-V porovnaní s binárnym hodnotením (F1 $>$ 0.96) je multiclass úloha
-výrazne náročnejšia. Model spoľahlivo rozlišuje medzi legitímnymi
-a podozrivými správami, avšak detailné rozlíšenie medzi jednotlivými
-typmi útokov (najmä medzi \texttt{spam} a
-\texttt{financial\_fraud}) zostáva limitované.
+V porovnaní s binárnym hodnotením ostáva multiclass úloha náročnejšia,
+avšak adapted+OVR výrazne znížil pôvodný kolaps tried
+\texttt{phishing} a \texttt{financial\_fraud} do \texttt{spam}.
+Výsledky tak ukazujú, že špecializácia tréningu a rozhodovacieho
+headu môže výrazne zlepšiť subclass diskrimináciu, no za cenu
+horšej všeobecnej offline robustnosti.
 
 Pri interpretácii výsledkov je potrebné zohľadniť, že kampane z
 Experimentov~2\ref{epx2} a~3\ref{epx3} sú zámerne konštruované so zameraním na konkrétne
@@ -1745,13 +1747,23 @@ robustnosti modelu voči špecifickým distribučným posunom a typom útokov.
 
 \paragraph{Výber finálneho modelu}
 
-Na základe kombinácie výsledkov zo všetkých splitov a kampaní bol
-ako finálny model zvolený
-\texttt{scenario\_m\_rebalanced\_fraud\_spam} s modelom
-\texttt{hybrid\_sgd\_log}. Tento model dosahuje najlepší kompromis
-medzi presnosťou na \texttt{test\_deployment}, robustnosťou voči
-distribučným posunom (\texttt{test\_hard\_source}) a schopnosťou
-detegovať minoritné triedy.
+Na základe kombinácie výsledkov zo všetkých splitov a kampaní sa ukázalo,
+že neexistuje jeden univerzálne najsilnejší variant pre všetky typy dát.
+Ako \textbf{finálny general/offline model} bol preto zvolený retunovaný
+variant \texttt{scenario\_m\_anti\_template\_feature\_regularized}
+s modelom \texttt{hybrid\_logreg}. V SHAP-guided nastavení dosiahol
+\texttt{f1\_macro = 0.9105} na \texttt{test\_iid},
+\texttt{0.8744} na \texttt{test\_hard\_source},
+\texttt{0.8638} na \texttt{test\_hard\_cluster} a
+\texttt{0.9076} na \texttt{test\_deployment}.
+
+Ako \textbf{finálny campaign-specialized variant} pre špecializované
+header/auth a URL kampane bol zvolený model s campaign-style adaptačným
+tréningom bez leakage, zúženou spam triedou a \textit{one-vs-rest}
+subclass hlavou (adapted+OVR). Tento variant dosiahol na Exp2
+\texttt{bin\_f1 = 0.9809}, \texttt{mc\_f1\_macro = 0.5865} a na Exp3
+\texttt{bin\_f1 = 0.9610}, \texttt{mc\_f1\_macro = 0.6052}, ale jeho
+offline výsledky boli citeľne slabšie než pri tuned single-stage modeli.
 
 \paragraph{Zhrnutie experimentu}
 
@@ -1760,11 +1772,12 @@ nie je postačujúce pre realistické nasadenie. Scenáre zamerané
 na variabilitu dát (anti-template) a vyváženie tried (rebalancing)
 významne zlepšujú robustnosť modelov.
 
-Výsledky zároveň naznačujú, že kombinácia vhodného tréningového
-scenára a optimalizačnej metódy je kľúčová pre dosiahnutie
-optimálneho výkonu. Navrhnutý finálny model predstavuje robustné
-riešenie schopné generalizovať na nové typy útokov a praktické
-nasadenie.
+Výsledky zároveň ukazujú, že kombinácia vhodného tréningového
+scenára, rozhodovacieho headu a dátovej špecializácie je kľúčová
+pre dosiahnutie optimálneho výkonu. Tuned single-stage model predstavuje
+robustné riešenie pre všeobecné nasadenie a offline generalizáciu,
+zatiaľ čo adapted+OVR je vhodný ako špecializovaný variant pre
+campaign benchmarky s výrazným header/auth alebo URL biasom.
 
 \subsubsection{Experiment 5 – Porovnanie heuristického, ML a hybridného prístupu na jednotnom benchmarku}\label{exp5}
 
@@ -1776,11 +1789,11 @@ generalizáciu a správanie modelov naprieč rôznymi typmi dát.
 
 \paragraph{Model setup}
 
-Ako reprezentant modelového prístupu bol použitý model zo scenára
-\texttt{scenario\_m\_rebalanced\_fraud\_spam} s klasifikátorom
+Ako reprezentant modelového prístupu bol použitý tuned single-stage model zo scenára
+\texttt{scenario\_m\_anti\_template\_feature\_regularized} s klasifikátorom
 \texttt{hybrid\_logreg} a vstupným režimom \texttt{text\_plus\_features}.
 Tento model bol zvolený na základe výsledkov Experimentu 4 \ref{exp4}, kde preukázal
-najlepší kompromis medzi výkonom a robustnosťou.
+najlepší kompromis medzi offline robustnosťou, multiclass výkonom a generalizáciou.
 
 \paragraph{Zostavenie benchmarku}
 
@@ -2119,19 +2132,21 @@ a manuálna analýza ako doplnkový krok pri zložitejších prípadoch.
 \subsubsection{Finálna konfigurácia detekčného systému}
 
 Na základe výsledkov experimentov 1 až 6 bola navrhnutá finálna konfigurácia
-detekčného systému, ktorá predstavuje najlepší kompromis medzi presnosťou,
-robustnosťou a praktickou použiteľnosťou.
+detekčného systému, ktorá oddeľuje všeobecný robustný model od
+špecializovaného campaign-oriented variantu. Toto rozdelenie sa ukázalo
+ako metodicky čistejšie než snaha vynútiť jeden univerzálny model pre
+všetky typy dát.
 
 \paragraph{Zvolená konfigurácia}
 
 \begin{itemize}
-    \item \textbf{Scenár dát:} \texttt{scenario\_m\_rebalanced\_fraud\_spam}
-    \item \textbf{Model:} \texttt{hybrid\_logreg} (single-stage klasifikátor)
-    \item \textbf{Vstupný režim:} \texttt{text\_plus\_features}
-    \item \textbf{Rozhodovanie:}
+    \item \textbf{Primárny general/offline model:} \texttt{scenario\_m\_anti\_template\_feature\_regularized + hybrid\_logreg} v režime \texttt{text\_plus\_features} so SHAP-guided feature subsetom.
+    \item \textbf{Špecializovaný campaign variant:} campaign-style adaptačný tréning bez leakage, zúženie spam triedy a \textit{one-vs-rest} subclass hlava nad rovnakou textovo-feature reprezentáciou.
+    \item \textbf{Rozhodovanie:} finálne rozhodnutie realizuje ML model, pričom heuristika slúži ako doplnková vrstva pre risk score a explainability.
+    \item \textbf{Nasadenie:}
     \begin{itemize}
-        \item finálne rozhodnutie realizuje ML model,
-        \item heuristika slúži ako doplnková vrstva (risk score, explainability).
+        \item pre všeobecné nasadenie a offline generalizáciu je preferovaný tuned single-stage model,
+        \item pre špecializované header/auth a URL-heavy campaign scenáre je vhodný adapted+OVR variant.
     \end{itemize}
     \item \textbf{Výstup systému:}
     \begin{itemize}
@@ -2157,11 +2172,13 @@ Výber finálnej konfigurácie vychádza z konzistentných výsledkov naprieč e
     
     \item \textbf{Experiment 5:}
     model strojového učenia (\texttt{ml\_only}) dosahuje najlepší globálny výkon,
-    pričom hybridné prístupy neprinášajú automatické zlepšenie bez starostlivého návrhu.
+    pričom výber konkrétneho variantu musí rešpektovať rozdiel medzi generalistickým
+    a campaign-specialized nastavením.
     
     \item \textbf{Experiment 2 a 3:}
     heuristické indikátory sú veľmi presné na detekciu konkrétnych znakov,
-    ale menej spoľahlivé ako finálny rozhodovací mechanizmus.
+    no najväčšie zlepšenie priniesol až campaign-style adaptačný tréning,
+    zúženie spam triedy a OVR subclass hlava.
     
     \item \textbf{Experiment 6:}
     porovnanie s nástrojom PhishTool ukazuje,
@@ -2173,7 +2190,9 @@ Výber finálnej konfigurácie vychádza z konzistentných výsledkov naprieč e
 
 Výsledná architektúra systému reflektuje kombinovaný prístup,
 kde model strojového učenia predstavuje hlavný rozhodovací komponent
-a heuristika slúži ako doplnkový zdroj informácií.
+a heuristika slúži ako doplnkový zdroj informácií. Zároveň sa ukázalo,
+že v praxi je vhodné rozlišovať medzi general/offline variantom modelu
+a špecializovaným campaign-oriented variantom pre úzko zamerané benchmarky.
 
 Takýto návrh umožňuje dosiahnuť vysokú presnosť pri zachovaní
 interpretovateľnosti výsledkov, čo je kľúčové pre praktické nasadenie.
