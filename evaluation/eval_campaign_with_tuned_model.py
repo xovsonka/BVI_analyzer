@@ -367,6 +367,29 @@ def _build_sample_weight(train_df: pd.DataFrame, spam_weight: float, phishing_we
     return base * row_mult
 
 
+def _apply_ovr_pair_hard_negative_weights(
+    suspicious_train: pd.DataFrame,
+    suspicious_weight: np.ndarray,
+    target_label: str,
+    phishing_spam_multiplier: float,
+    fraud_spam_multiplier: float,
+) -> np.ndarray:
+    local_weight = np.asarray(suspicious_weight, dtype=float).copy()
+    labels = suspicious_train["label"].astype(str).to_numpy()
+
+    if target_label == "phishing" and phishing_spam_multiplier > 1.0:
+        local_weight[labels == "spam"] *= float(phishing_spam_multiplier)
+    elif target_label == "financial_fraud" and fraud_spam_multiplier > 1.0:
+        local_weight[labels == "spam"] *= float(fraud_spam_multiplier)
+    elif target_label == "spam":
+        if phishing_spam_multiplier > 1.0:
+            local_weight[labels == "phishing"] *= float(phishing_spam_multiplier)
+        if fraud_spam_multiplier > 1.0:
+            local_weight[labels == "financial_fraud"] *= float(fraud_spam_multiplier)
+
+    return local_weight
+
+
 def _predict_with_multiclass_head(
     model: Pipeline,
     x_eval: pd.DataFrame,
@@ -399,6 +422,8 @@ def _predict_with_ovr_subclass_head(
     sample_weight: np.ndarray,
     class_scales: dict[str, float],
     scale_mode: str,
+    phishing_spam_multiplier: float,
+    fraud_spam_multiplier: float,
 ) -> pd.Series:
     x_train = train_df[["text_input", *selected_features]].copy()
     x_eval = eval_df[["text_input", *selected_features]].copy()
@@ -424,8 +449,15 @@ def _predict_with_ovr_subclass_head(
     suspicious_x_train = suspicious_train[["text_input", *selected_features]].copy()
     for label in subclass_labels:
         target = suspicious_train["label"].astype(str).eq(label).astype(int)
+        local_weight = _apply_ovr_pair_hard_negative_weights(
+            suspicious_train=suspicious_train,
+            suspicious_weight=suspicious_weight,
+            target_label=label,
+            phishing_spam_multiplier=float(phishing_spam_multiplier),
+            fraud_spam_multiplier=float(fraud_spam_multiplier),
+        )
         model = _build_model(model_name, numeric_features=selected_features)
-        model.fit(suspicious_x_train, target, clf__sample_weight=suspicious_weight)
+        model.fit(suspicious_x_train, target, clf__sample_weight=local_weight)
         subclass_models[label] = model
 
     pred_labels = pd.Series(["legit"] * len(eval_df), index=eval_df.index, dtype=str)
@@ -502,6 +534,18 @@ def main() -> None:
     parser.add_argument("--phishing-weight", type=float, default=1.0)
     parser.add_argument("--fraud-weight", type=float, default=1.3)
     parser.add_argument("--hardneg-multiplier", type=float, default=1.0)
+    parser.add_argument(
+        "--ovr-phishing-spam-hardneg",
+        type=float,
+        default=1.0,
+        help="Weight multiplier for the phishing-vs-spam OVR boundary.",
+    )
+    parser.add_argument(
+        "--ovr-fraud-spam-hardneg",
+        type=float,
+        default=1.0,
+        help="Weight multiplier for the financial_fraud-vs-spam OVR boundary.",
+    )
     parser.add_argument("--output-pred-csv", required=True)
     parser.add_argument("--output-summary-csv", required=True)
     parser.add_argument("--output-per-class-csv", required=True)
@@ -537,8 +581,8 @@ def main() -> None:
     if args.feature_audit_csv:
         audit = pd.read_csv(args.feature_audit_csv)
         if "feature" in audit.columns and "keep" in audit.columns:
-            keep = audit[audit["keep"].astype(bool)]["feature"].astype(str).tolist()
-            selected_features = [feature for feature in selected_features if feature in keep]
+            drop = audit[~audit["keep"].astype(bool)]["feature"].astype(str).tolist()
+            selected_features = [feature for feature in selected_features if feature not in drop]
     if not selected_features:
         raise RuntimeError("No numeric features selected for model input")
 
@@ -628,6 +672,8 @@ def main() -> None:
             sample_weight=sample_weight,
             class_scales=class_scales,
             scale_mode=str(args.scale_mode),
+            phishing_spam_multiplier=float(args.ovr_phishing_spam_hardneg),
+            fraud_spam_multiplier=float(args.ovr_fraud_spam_hardneg),
         )
     y_true_mc = analyzed["y_true_multiclass"].astype(str)
     y_pred_mc = pred_label.astype(str)
@@ -657,6 +703,8 @@ def main() -> None:
         "phishing_weight": float(args.phishing_weight),
         "fraud_weight": float(args.fraud_weight),
         "hardneg_multiplier": float(args.hardneg_multiplier),
+        "ovr_phishing_spam_hardneg": float(args.ovr_phishing_spam_hardneg),
+        "ovr_fraud_spam_hardneg": float(args.ovr_fraud_spam_hardneg),
         "adaptation_csv": str(args.adaptation_csv),
         "adaptation_weight": float(args.adaptation_weight),
         "adaptation_rows_added": int(adaptation_meta.get("rows_added", 0)),

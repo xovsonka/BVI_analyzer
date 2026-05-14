@@ -28,6 +28,10 @@ BIN_LABELS = ["legit", "suspicious"]
 MC_LABELS = ["legit", "phishing", "spam", "financial_fraud"]
 
 
+def _file_key(series: pd.Series) -> pd.Series:
+    return series.astype(str).map(lambda x: Path(x).name)
+
+
 def _binary_metrics(y_true: pd.Series, y_pred: pd.Series) -> dict[str, float]:
     yt = y_true.astype(str).str.lower().eq("suspicious").astype(int)
     yp = y_pred.astype(str).str.lower().eq("suspicious").astype(int)
@@ -131,10 +135,15 @@ def main() -> None:
     )
     parser.add_argument(
         "--processed-dir",
-        default="dataset/processed/scenario_m_rebalanced_fraud_spam",
+        default="dataset/processed/scenario_m_anti_template_feature_regularized",
     )
     parser.add_argument("--model", default="hybrid_logreg")
     parser.add_argument("--input-mode", default="text_plus_features")
+    parser.add_argument(
+        "--external-ml-pred-csv",
+        default="",
+        help="Optional external ML prediction CSV with file, ml_pred, ml_pred_binary.",
+    )
     parser.add_argument("--heur-threshold", type=int, default=20)
     parser.add_argument("--hybrid-a-high-threshold", type=int, default=35)
     parser.add_argument("--hybrid-b-fallback", default="phishing")
@@ -188,31 +197,56 @@ def main() -> None:
         .replace({"nan": pd.NA, "<na>": pd.NA, "": pd.NA, "none": pd.NA})
     )
 
-    train_path = Path(args.processed_dir) / "train.csv"
-    train_df = ensure_features(
-        pd.read_csv(
-            train_path,
-            low_memory=False,
-            nrows=args.max_train_rows if args.max_train_rows > 0 else None,
+    if args.external_ml_pred_csv:
+        pred_df = pd.read_csv(args.external_ml_pred_csv, low_memory=False).copy()
+        pred_df["file_key"] = _file_key(pred_df["file"])
+        join_cols = ["file"] if "file" in pred_df.columns and "file" in benchmark.columns else ["file_key"]
+        pred_small = pred_df[[c for c in [*join_cols, "ml_pred", "ml_pred_binary"] if c in pred_df.columns]].drop_duplicates(subset=join_cols)
+        benchmark = benchmark.copy()
+        benchmark["file_key"] = _file_key(benchmark["file"])
+        benchmark = benchmark.merge(pred_small, on=join_cols, how="left")
+        ml_pred_mc = benchmark["ml_pred"].astype(str).replace({"nan": "", "<NA>": ""})
+        missing_mc = ml_pred_mc.eq("")
+        if missing_mc.any():
+            raise RuntimeError(f"Missing external multiclass predictions for {int(missing_mc.sum())} benchmark rows")
+        ml_pred_mc = ml_pred_mc.astype(str)
+    else:
+        train_path = Path(args.processed_dir) / "train.csv"
+        train_df = ensure_features(
+            pd.read_csv(
+                train_path,
+                low_memory=False,
+                nrows=args.max_train_rows if args.max_train_rows > 0 else None,
+            )
         )
-    )
-    le = LabelEncoder()
-    y_train = le.fit_transform(train_df["label"].astype(str))
-    model = build_model(args.model, input_mode=args.input_mode)
-    model.fit(select_model_input(train_df, args.input_mode), y_train)
+        le = LabelEncoder()
+        y_train = le.fit_transform(train_df["label"].astype(str))
+        model = build_model(args.model, input_mode=args.input_mode)
+        model.fit(select_model_input(train_df, args.input_mode), y_train)
 
-    x_eval = select_model_input(benchmark, args.input_mode)
-    ml_pred_idx = model.predict(x_eval)
-    ml_pred_mc = pd.Series(le.inverse_transform(ml_pred_idx), index=benchmark.index)
+        x_eval = select_model_input(benchmark, args.input_mode)
+        ml_pred_idx = model.predict(x_eval)
+        ml_pred_mc = pd.Series(le.inverse_transform(ml_pred_idx), index=benchmark.index)
 
     score = pd.to_numeric(benchmark["heuristic_score"], errors="coerce").fillna(0.0)
     heur_bin = _heuristic_pred_binary(score, args.heur_threshold)
     heur_mc = _heuristic_pred_multiclass(heur_bin)
 
-    ml_bin = pd.Series(
-        np.where(ml_pred_mc.eq("legit"), "legit", "suspicious"),
-        index=benchmark.index,
-    )
+    if args.external_ml_pred_csv and "ml_pred_binary" in benchmark.columns:
+        ml_bin = benchmark["ml_pred_binary"].astype(str).replace({"nan": "", "<NA>": ""})
+        missing_bin = ml_bin.eq("")
+        if missing_bin.any():
+            ml_bin = pd.Series(
+                np.where(ml_pred_mc.eq("legit"), "legit", "suspicious"),
+                index=benchmark.index,
+            )
+        else:
+            ml_bin = ml_bin.astype(str)
+    else:
+        ml_bin = pd.Series(
+            np.where(ml_pred_mc.eq("legit"), "legit", "suspicious"),
+            index=benchmark.index,
+        )
 
     hyb_a_mc = ml_pred_mc.copy()
     hyb_a_bin = _hybrid_a_binary(

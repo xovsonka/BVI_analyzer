@@ -149,7 +149,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--exp1-pred-csv",
-        default="results/experiment_5/exp1_campaign_ml_predictions.csv",
+        default="results/retuned_exp1234/semantic_cta_eval/exp1_spamboost_ps160_fs160_pred.csv",
     )
     parser.add_argument(
         "--exp2-analyzed-csv",
@@ -157,7 +157,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--exp2-pred-csv",
-        default="results/eperiment_2_results/experiment_2_campaign_ml_predictions.csv",
+        default="results/retuned_exp1234/semantic_cta_eval/exp2_spamboost_ps130_fs160_pred.csv",
     )
     parser.add_argument(
         "--exp3-analyzed-csv",
@@ -165,7 +165,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--exp3-pred-csv",
-        default="results/experiment_3_result/experiment_3_campaign_ml_predictions.csv",
+        default="results/retuned_exp1234/semantic_cta_eval/exp3_ps160_fs160_pred.csv",
     )
     parser.add_argument(
         "--exp2-tracka-analyzed-csv",

@@ -57,6 +57,97 @@ CREDENTIAL_WORDS = {"account", "security", "signin", "password", "confirm", "log
 THREAT_WORDS = {"terminate", "locked", "disable", "expired", "suspend", "blocked"}
 FINANCIAL_WORDS = {"payment", "invoice", "bank", "billing", "fund", "card", "transfer"}
 
+SEMANTIC_FLAG_PATTERNS: dict[str, tuple[str, ...]] = {
+    "cta_login_flag": (
+        r"\bsign[\s-]?in\b",
+        r"\blog[\s-]?in\b",
+        r"\blogin\b",
+        r"\baccess (?:your )?account\b",
+        r"\bconfirm sign[\s-]?in\b",
+    ),
+    "cta_verify_flag": (
+        r"\bverify (?:your )?(?:account|mailbox|identity|details)\b",
+        r"\bverification required\b",
+        r"\baccount verification\b",
+    ),
+    "cta_recovery_flag": (
+        r"\baccount recovery\b",
+        r"\brecovery details\b",
+        r"\brecover (?:your )?account\b",
+        r"\breset recovery\b",
+    ),
+    "cta_payment_flag": (
+        r"\bmake payment\b",
+        r"\bpayment required\b",
+        r"\bpay now\b",
+        r"\bconfirm payment\b",
+        r"\bpayment status\b",
+    ),
+    "cta_bank_transfer_flag": (
+        r"\bbank transfer\b",
+        r"\bwire transfer\b",
+        r"\btransfer reference\b",
+        r"\btransfer confirmation\b",
+    ),
+    "invoice_reference_flag": (
+        r"\binvoice(?:\s+(?:number|no\.?|#))?\b",
+        r"\binv[- ]?\d+\b",
+        r"\bbilling reference\b",
+    ),
+    "remittance_reference_flag": (
+        r"\bremittance\b",
+        r"\bremittance advice\b",
+        r"\bsettlement reference\b",
+    ),
+    "currency_amount_pattern_flag": (
+        r"\b(?:EUR|USD|GBP)\s?\d[\d,.]*\b",
+        r"[$€£]\s?\d[\d,.]*",
+    ),
+    "due_date_pattern_flag": (
+        r"\bdue today\b",
+        r"\bpayment due\b",
+        r"\boverdue\b",
+        r"\bbefore end of day\b",
+        r"\bdue date\b",
+    ),
+}
+
+ACCOUNT_SECURITY_PATTERNS: tuple[str, ...] = (
+    r"\bsecurity alert\b",
+    r"\bsuspicious activity\b",
+    r"\bsign[\s-]?in attempt\b",
+    r"\bmailbox review\b",
+    r"\baccount protection\b",
+)
+
+SPAM_SEMANTIC_FLAG_PATTERNS: dict[str, tuple[str, ...]] = {
+    "spam_reward_flag": (
+        r"\bmember reward\b",
+        r"\bclaim (?:your )?reward\b",
+        r"\bbonus access\b",
+        r"\bmember perk\b",
+        r"\bbonus package\b",
+    ),
+    "spam_unsubscribe_context_flag": (
+        r"\bunsubscribe from future\b",
+        r"\bunsubscribe if you\b",
+        r"\bstop receiving promotional\b",
+        r"\bno longer want future promotional\b",
+    ),
+}
+
+SPAM_MARKETING_PATTERNS: tuple[str, ...] = (
+    r"\bcampaign list\b",
+    r"\bpromotional updates\b",
+    r"\bpromotional notice\b",
+    r"\bmarketing reward\b",
+    r"\bselected recipients\b",
+    r"\bselected members\b",
+    r"\bfuture promotional updates\b",
+    r"\bfuture promotional mailings\b",
+    r"\breward campaign\b",
+)
+
 NEW_FEATURES = [
     "display_name_spoof_flag",
     "message_id_domain_mismatch",
@@ -65,6 +156,19 @@ NEW_FEATURES = [
     "obfuscated_url_count",
     "mismatched_anchor_count",
     "punycode_url_count",
+    "cta_login_flag",
+    "cta_verify_flag",
+    "cta_recovery_flag",
+    "account_security_phrase_count",
+    "cta_payment_flag",
+    "cta_bank_transfer_flag",
+    "invoice_reference_flag",
+    "remittance_reference_flag",
+    "currency_amount_pattern_flag",
+    "due_date_pattern_flag",
+    "spam_reward_flag",
+    "spam_unsubscribe_context_flag",
+    "spam_marketing_phrase_count",
 ]
 
 BACKFILL_RAW_COLS = [
@@ -284,6 +388,22 @@ def _compute_url_bundle(text: str, sender_domain: str) -> dict[str, float]:
     }
 
 
+def _compute_semantic_cta_features(text: str) -> dict[str, float]:
+    low = str(text or "").lower()
+    out: dict[str, float] = {}
+    for feature, patterns in SEMANTIC_FLAG_PATTERNS.items():
+        out[feature] = float(any(re.search(pattern, low, flags=re.IGNORECASE) for pattern in patterns))
+    for feature, patterns in SPAM_SEMANTIC_FLAG_PATTERNS.items():
+        out[feature] = float(any(re.search(pattern, low, flags=re.IGNORECASE) for pattern in patterns))
+    out["account_security_phrase_count"] = float(
+        sum(bool(re.search(pattern, low, flags=re.IGNORECASE)) for pattern in ACCOUNT_SECURITY_PATTERNS)
+    )
+    out["spam_marketing_phrase_count"] = float(
+        sum(bool(re.search(pattern, low, flags=re.IGNORECASE)) for pattern in SPAM_MARKETING_PATTERNS)
+    )
+    return out
+
+
 def _ensure_text_columns(df: pd.DataFrame) -> pd.DataFrame:
     out = df.copy()
 
@@ -429,6 +549,12 @@ def add_engineered_features(df: pd.DataFrame) -> pd.DataFrame:
     out["threat_keyword_count"] = text_for_keywords.map(lambda text: keyword_count(text, THREAT_WORDS)).astype(int)
     out["financial_keyword_count"] = text_for_keywords.map(lambda text: keyword_count(text, FINANCIAL_WORDS)).astype(int)
 
+    semantic_text = out["subject_raw"].astype(str) + "\n\n" + out["body_raw"].astype(str)
+    semantic_rows = semantic_text.map(_compute_semantic_cta_features)
+    semantic_df = pd.DataFrame(semantic_rows.tolist(), index=out.index)
+    for col in semantic_df.columns:
+        out[col] = semantic_df[col]
+
     out["subject_len"] = out["subject"].astype(str).str.len().astype(int)
     out["text_len"] = out["text"].astype(str).str.len().astype(int)
     out["exclamation_count"] = out["text"].astype(str).str.count("!").astype(int)
@@ -492,6 +618,19 @@ def add_engineered_features(df: pd.DataFrame) -> pd.DataFrame:
         "obfuscated_url_count",
         "mismatched_anchor_count",
         "punycode_url_count",
+        "cta_login_flag",
+        "cta_verify_flag",
+        "cta_recovery_flag",
+        "account_security_phrase_count",
+        "cta_payment_flag",
+        "cta_bank_transfer_flag",
+        "invoice_reference_flag",
+        "remittance_reference_flag",
+        "currency_amount_pattern_flag",
+        "due_date_pattern_flag",
+        "spam_reward_flag",
+        "spam_unsubscribe_context_flag",
+        "spam_marketing_phrase_count",
     ]:
         out[col] = pd.to_numeric(out[col], errors="coerce").fillna(0.0)
 

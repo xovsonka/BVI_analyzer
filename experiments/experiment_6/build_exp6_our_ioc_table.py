@@ -10,6 +10,13 @@ def _file_key(series: pd.Series) -> pd.Series:
     return series.astype(str).map(lambda x: Path(x).name)
 
 
+def _orig_file_key(series: pd.Series) -> pd.Series:
+    def _strip(name: str) -> str:
+        base = Path(str(name)).name
+        return base.split("__", 1)[1] if "__" in base else base
+    return series.astype(str).map(_strip)
+
+
 def _num(df: pd.DataFrame, col: str, default: float = 0.0) -> pd.Series:
     if col not in df.columns:
         return pd.Series([default] * len(df), index=df.index, dtype=float)
@@ -74,15 +81,15 @@ def main() -> None:
     )
     parser.add_argument(
         "--exp1-pred-csv",
-        default="results/experiment_5/exp1_campaign_ml_predictions.csv",
+        default="results/retuned_exp1234/semantic_cta_eval/exp1_spamboost_ps160_fs160_pred.csv",
     )
     parser.add_argument(
         "--exp2-b-pred-csv",
-        default="results/eperiment_2_results/experiment_2_campaign_ml_predictions.csv",
+        default="results/retuned_exp1234/semantic_cta_eval/exp2_spamboost_ps130_fs160_pred.csv",
     )
     parser.add_argument(
         "--exp3-b-pred-csv",
-        default="results/experiment_3_result/experiment_3_campaign_ml_predictions.csv",
+        default="results/retuned_exp1234/semantic_cta_eval/exp3_ps160_fs160_pred.csv",
     )
     parser.add_argument("--heur-threshold", type=int, default=20)
     parser.add_argument(
@@ -93,6 +100,7 @@ def main() -> None:
 
     selection = pd.read_csv(args.selection_csv, low_memory=False)
     selection["file_key"] = _file_key(selection["file"])
+    selection["orig_file_key"] = _orig_file_key(selection["file"])
 
     analyzed = pd.concat(
         [
@@ -118,11 +126,18 @@ def main() -> None:
 
     merged = selection.merge(
         analyzed,
-        on=["file_key", "benchmark_source"],
+        left_on=["orig_file_key", "benchmark_source"],
+        right_on=["file_key", "benchmark_source"],
         how="left",
         suffixes=("", "_an"),
     )
-    merged = merged.merge(preds, on=["file_key", "benchmark_source"], how="left")
+    merged = merged.merge(
+        preds,
+        left_on=["orig_file_key", "benchmark_source"],
+        right_on=["file_key", "benchmark_source"],
+        how="left",
+        suffixes=("", "_pred"),
+    )
 
     out = pd.DataFrame()
     out["exp6_id"] = _str(merged, "exp6_id")

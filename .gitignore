@@ -35,7 +35,39 @@ dataset/processed/mailhog_messages.csv
 BVI_6_Projekt*.pdf
 nul
 *.log
+*.tmp
+*.bak
+
+# LaTeX build artifacts
+*.aux
+*.bbl
+*.bcf
+*.blg
+*.fdb_latexmk
+*.fls
+*.lof
+*.lot
+*.nav
+*.out
+*.run.xml
+*.snm
+*.synctex.gz
+*.toc
+*.vrb
+main.pdf
+
+# Generated plot PNG duplicates (PDF versions are used in thesis)
+exp1_model_comparison.png
+exp1_multiclass_method_comparison.png
+exp1_m_confusion_best_final.png
+exp2_header_auth_indicator_contribution.png
+exp2_per_class_baseline_vs_adapted_ovr.png
+exp3_per_class_baseline_vs_adapted_ovr.png
+exp3_url_indicator_spearman_correlation.png
+exp4_general_vs_campaign_tradeoff.png
+exp4_trackA_deployment_macro_f1.png
+final_model_confusion_matrix_test_deployment.png
+lm_hard_grouped_models.png
 
 archive/
 models/
-
